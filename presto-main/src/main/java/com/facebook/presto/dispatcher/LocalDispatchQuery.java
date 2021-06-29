@@ -28,6 +28,7 @@ import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.QueryId;
 import com.facebook.presto.spi.prerequisites.QueryPrerequisites;
 import com.facebook.presto.spi.prerequisites.QueryPrerequisitesContext;
+import com.facebook.presto.spi.resourceGroups.ResourceGroupQueryLimits;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import io.airlift.units.DataSize;
@@ -37,6 +38,7 @@ import org.joda.time.DateTime;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import static com.facebook.airlift.concurrent.MoreFutures.addExceptionCallback;
@@ -67,6 +69,7 @@ public class LocalDispatchQuery
     private final Consumer<DispatchQuery> queryQueuer;
     private final Consumer<QueryExecution> querySubmitter;
     private final SettableFuture<?> submitted = SettableFuture.create();
+    private final AtomicReference<Optional<ResourceGroupQueryLimits>> resourceGroupQueryLimits = new AtomicReference<>(Optional.empty());
 
     private final boolean retry;
 
@@ -182,6 +185,7 @@ public class LocalDispatchQuery
         queryExecutor.execute(() -> {
             if (stateMachine.transitionToDispatching()) {
                 try {
+                    resourceGroupQueryLimits.get().ifPresent(queryExecution::setResourceGroupQueryLimits);
                     querySubmitter.accept(queryExecution);
                 }
                 catch (Throwable t) {
@@ -345,6 +349,20 @@ public class LocalDispatchQuery
     public void addStateChangeListener(StateChangeListener<QueryState> stateChangeListener)
     {
         stateMachine.addStateChangeListener(stateChangeListener);
+    }
+
+    @Override
+    public Optional<ResourceGroupQueryLimits> getResourceGroupQueryLimits()
+    {
+        return resourceGroupQueryLimits.get();
+    }
+
+    @Override
+    public void setResourceGroupQueryLimits(ResourceGroupQueryLimits resourceGroupQueryLimits)
+    {
+        if (!this.resourceGroupQueryLimits.compareAndSet(Optional.empty(), Optional.of(requireNonNull(resourceGroupQueryLimits, "resourceGroupQueryLimits is null")))) {
+            throw new IllegalStateException("Cannot set resourceGroupQueryLimits more than once");
+        }
     }
 
     private Optional<QueryExecution> tryGetQueryExecution()

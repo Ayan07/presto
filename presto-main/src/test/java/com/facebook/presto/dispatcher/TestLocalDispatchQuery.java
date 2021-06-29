@@ -20,6 +20,7 @@ import com.facebook.presto.event.QueryMonitorConfig;
 import com.facebook.presto.eventlistener.EventListenerManager;
 import com.facebook.presto.execution.ClusterSizeMonitor;
 import com.facebook.presto.execution.ExecutionFailureInfo;
+import com.facebook.presto.execution.MockQueryExecution;
 import com.facebook.presto.execution.QueryExecution;
 import com.facebook.presto.execution.QueryStateMachine;
 import com.facebook.presto.execution.StageInfo;
@@ -320,7 +321,7 @@ public class TestLocalDispatchQuery
         LocalDispatchQuery query = new LocalDispatchQuery(
                 stateMachine,
                 createQueryMonitor(eventListener),
-                immediateFuture(null),
+                immediateFuture(new MockQueryExecution()),
                 createClusterSizeMonitor(0),
                 directExecutor(),
                 dispatchQuery -> {},
@@ -412,7 +413,7 @@ public class TestLocalDispatchQuery
         LocalDispatchQuery query = new LocalDispatchQuery(
                 stateMachine,
                 createQueryMonitor(eventListener),
-                immediateFuture(null),
+                immediateFuture(new MockQueryExecution()),
                 createClusterSizeMonitor(0),
                 directExecutor(),
                 dispatchQuery -> {},
