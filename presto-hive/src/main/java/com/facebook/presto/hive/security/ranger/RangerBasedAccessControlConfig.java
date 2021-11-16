@@ -28,12 +28,15 @@ public class RangerBasedAccessControlConfig
     public static final String RANGER_REST_POLICY_HIVE_SERVICE_NAME = "hive.ranger.policy.hive-servicename";
     public static final String RANGER_REST_USER_GROUPS_AUTH_USERNAME = "hive.ranger.service.basic-auth-username";
     public static final String RANGER_REST_USER_GROUPS_AUTH_PASSWORD = "hive.ranger.service.basic-auth-password";
+    public static final String RANGER_HIVE_AUDIT_PATH = "hive.ranger.audit.path";
+    public static final String RANGER_REST_POLICY_MGR_KEYSTORE_PATH = "hive.ranger.service.keystore.path";
+    public static final String RANGER_REST_POLICY_MGR_KEYSTORE_PWD = "hive.ranger.service.keystore.password";
+    public static final String RANGER_REST_POLICY_MGR_TRUST_STORE_PATH = "hive.ranger.service.truststore.path";
+    public static final String RANGER_REST_POLICY_MGR_TRUST_STORE_PWD = "hive.ranger.service.truststore.password";
 
     public static final String RANGER_REST_POLICY_MGR_DOWNLOAD_URL = "/service/plugins/policies/download";
     public static final String RANGER_REST_USER_GROUP_URL = "/service/xusers/users";
     public static final String RANGER_REST_USER_ROLES_URL = "/service/roles/roles/user";
-
-    public static final String RANGER_HIVE_AUDIT_PATH = "hive.ranger.audit.path";
 
     private String rangerHttpEndPoint;
     private String rangerHiveServiceName;
@@ -41,6 +44,10 @@ public class RangerBasedAccessControlConfig
     private String basicAuthUser;
     private String basicAuthPassword;
     private String rangerHiveAuditPath;
+    private String rangerRestKeystorePath;
+    private String rangerRestKeystorePwd;
+    private String rangerRestTruststorePath;
+    private String rangerRestTruststorePwd;
 
     @MinDuration("60s")
     public Duration getRefreshPeriod()
@@ -116,6 +123,54 @@ public class RangerBasedAccessControlConfig
     public RangerBasedAccessControlConfig setRangerHiveAuditPath(String rangerHiveAuditPath)
     {
         this.rangerHiveAuditPath = rangerHiveAuditPath;
+        return this;
+    }
+
+    public String getRangerRestKeystorePath()
+    {
+        return rangerRestKeystorePath;
+    }
+
+    @Config(RANGER_REST_POLICY_MGR_KEYSTORE_PATH)
+    public RangerBasedAccessControlConfig setRangerRestKeystorePath(String rangerRestKeystorePath)
+    {
+        this.rangerRestKeystorePath = rangerRestKeystorePath;
+        return this;
+    }
+
+    public String getRangerRestKeystorePwd()
+    {
+        return rangerRestKeystorePwd;
+    }
+
+    @Config(RANGER_REST_POLICY_MGR_KEYSTORE_PWD)
+    public RangerBasedAccessControlConfig setRangerRestKeystorePwd(String rangerRestKeystorePwd)
+    {
+        this.rangerRestKeystorePwd = rangerRestKeystorePwd;
+        return this;
+    }
+
+    public String getRangerRestTruststorePath()
+    {
+        return rangerRestTruststorePath;
+    }
+
+    @Config(RANGER_REST_POLICY_MGR_TRUST_STORE_PATH)
+    public RangerBasedAccessControlConfig setRangerRestTruststorePath(String rangerRestTruststorePath)
+    {
+        this.rangerRestTruststorePath = rangerRestTruststorePath;
+        return this;
+    }
+
+    public String getRangerRestTruststorePwd()
+    {
+        return rangerRestTruststorePwd;
+    }
+
+    @Config(RANGER_REST_POLICY_MGR_TRUST_STORE_PWD)
+    public RangerBasedAccessControlConfig setRangerRestTruststorePwd(String rangerRestTruststorePwd)
+    {
+        this.rangerRestTruststorePwd = rangerRestTruststorePwd;
         return this;
     }
 }

@@ -605,6 +605,17 @@ Property Name                                      Description                  
 
 ``hive.ranger.service.basic-auth-password``        Ranger Hive plugin password configured with
                                                    for Basic HTTP auth.
+
+``hive.ranger.audit.path``                         Ranger Audit configuration - ranger audit file path
+
+``hive.ranger.service.keystore.path``              Ranger SSL configuration - client keystore file path
+
+``hive.ranger.service.keystore.password``          Ranger SSL configuration - client keystore password
+
+``hive.ranger.service.truststore.path``            Ranger SSL configuration - client trust-store file path
+
+``hive.ranger.service.truststore.password``        Ranger SSL configuration - client trust-store password
+
 ================================================== ============================================================ ============
 
 HDFS wire encryption
