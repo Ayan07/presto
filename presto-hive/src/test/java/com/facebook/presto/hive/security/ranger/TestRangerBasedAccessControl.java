@@ -13,6 +13,11 @@
  */
 package com.facebook.presto.hive.security.ranger;
 
+import com.facebook.airlift.http.client.HttpClient;
+import com.facebook.airlift.http.client.HttpStatus;
+import com.facebook.airlift.http.client.Response;
+import com.facebook.airlift.http.client.testing.TestingHttpClient;
+import com.facebook.airlift.http.client.testing.TestingResponse;
 import com.facebook.presto.spi.QueryId;
 import com.facebook.presto.spi.SchemaTableName;
 import com.facebook.presto.spi.connector.ConnectorAccessControl;
@@ -25,8 +30,9 @@ import com.facebook.presto.spi.security.PrincipalType;
 import com.facebook.presto.spi.security.Privilege;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ImmutableSet;
-import org.apache.ranger.plugin.util.ServicePolicies;
+import com.google.common.io.ByteStreams;
 import org.testng.Assert.ThrowingRunnable;
 import org.testng.annotations.Test;
 
@@ -34,26 +40,25 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
-import java.util.stream.Collectors;
 
+import static com.facebook.presto.hive.security.ranger.RangerBasedAccessControlConfig.RANGER_REST_POLICY_MGR_DOWNLOAD_URL;
+import static com.facebook.presto.hive.security.ranger.RangerBasedAccessControlConfig.RANGER_REST_USER_GROUP_URL;
+import static com.facebook.presto.hive.security.ranger.RangerBasedAccessControlConfig.RANGER_REST_USER_ROLES_URL;
+import static java.lang.String.format;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.testng.Assert.assertThrows;
 
 public class TestRangerBasedAccessControl
 {
     public static final ConnectorTransactionHandle TRANSACTION_HANDLE = new ConnectorTransactionHandle() {};
     public static final AccessControlContext CONTEXT = new AccessControlContext(new QueryId("query_id"), Optional.empty(), Optional.empty());
+    private Response httpResponse;
 
     @Test
     public void testTablePriviledgesRolesNotAllowed()
-            throws IOException
     {
-        ConnectorAccessControl accessControl = createRangerAccessControl("default-allow-all.json", "user_groups.json", "user_roles.json");
+        ConnectorAccessControl accessControl = createRangerAccessControl("default-allow-all.json", "user_groups.json");
         assertDenied(() -> accessControl.checkCanRevokeTablePrivilege(TRANSACTION_HANDLE, user("anyuser"), CONTEXT, Privilege.SELECT,
                 new SchemaTableName("foodmart", "test"), new PrestoPrincipal(PrincipalType.ROLE, "role"), true));
         assertDenied(() -> accessControl.checkCanGrantTablePrivilege(TRANSACTION_HANDLE, user("anyuser"), CONTEXT, Privilege.SELECT,
@@ -67,9 +72,8 @@ public class TestRangerBasedAccessControl
 
     @Test
     public void testDefaultAccessAllowedNotChecked()
-            throws IOException
     {
-        ConnectorAccessControl accessControl = createRangerAccessControl("default-allow-all.json", "user_groups.json", "user_roles.json");
+        ConnectorAccessControl accessControl = createRangerAccessControl("default-allow-all.json", "user_groups.json");
         accessControl.checkCanShowTablesMetadata(TRANSACTION_HANDLE, user("anyuser"), CONTEXT, "schemaName");
         accessControl.checkCanSetCatalogSessionProperty(TRANSACTION_HANDLE, user("anyuser"), CONTEXT, "schemaName");
         accessControl.checkCanCreateSchema(TRANSACTION_HANDLE, user("anyuser"), CONTEXT, "schemaName");
@@ -78,9 +82,8 @@ public class TestRangerBasedAccessControl
 
     @Test
     public void testDefaultTableAccessIfNotDefined()
-            throws IOException
     {
-        ConnectorAccessControl accessControl = createRangerAccessControl("default-allow-all.json", "user_groups.json", "user_roles.json");
+        ConnectorAccessControl accessControl = createRangerAccessControl("default-allow-all.json", "user_groups.json");
         accessControl.checkCanCreateTable(TRANSACTION_HANDLE, user("admin"), CONTEXT, new SchemaTableName("test", "test"));
         accessControl.checkCanSelectFromColumns(TRANSACTION_HANDLE, user("alice"), CONTEXT, new SchemaTableName("test", "test"), ImmutableSet.of());
         accessControl.checkCanSelectFromColumns(TRANSACTION_HANDLE, user("bob"), CONTEXT, new SchemaTableName("bobschema", "bobtable"), ImmutableSet.of());
@@ -92,9 +95,8 @@ public class TestRangerBasedAccessControl
 
     @Test
     public void testTableOperations()
-            throws IOException
     {
-        ConnectorAccessControl accessControl = createRangerAccessControl("default-schema-level-access.json", "user_groups.json", "user_roles.json");
+        ConnectorAccessControl accessControl = createRangerAccessControl("default-schema-level-access.json", "user_groups.json");
         // 'etladmin' group have all access {group - etladmin, user - alice}
         accessControl.checkCanCreateTable(TRANSACTION_HANDLE, user("alice"), CONTEXT, new SchemaTableName("foodmart", "test"));
         accessControl.checkCanRenameTable(TRANSACTION_HANDLE, user("alice"), CONTEXT, new SchemaTableName("foodmart", "test"), new SchemaTableName("foodmart", "test1"));
@@ -125,9 +127,8 @@ public class TestRangerBasedAccessControl
 
     @Test
     public void testSelectUpdateAccess()
-            throws IOException
     {
-        ConnectorAccessControl accessControl = createRangerAccessControl("default-table-select-update.json", "user_groups.json", "user_roles.json");
+        ConnectorAccessControl accessControl = createRangerAccessControl("default-table-select-update.json", "user_groups.json");
         // 'etladmin' group have all access {group - etladmin, user - alice}
         accessControl.checkCanSelectFromColumns(TRANSACTION_HANDLE, user("alice"), CONTEXT, new SchemaTableName("foodmart", "test"), ImmutableSet.of("column1"));
         accessControl.checkCanInsertIntoTable(TRANSACTION_HANDLE, user("alice"), CONTEXT, new SchemaTableName("foodmart", "test"));
@@ -143,11 +144,10 @@ public class TestRangerBasedAccessControl
 
     @Test
     public void testColumnLevelAccess()
-            throws IOException
     {
-        ConnectorAccessControl accessControl = createRangerAccessControl("default-table-column-access.json", "user_groups.json", "user_roles.json");
-        // 'analyst' group have read acces {group - analyst, user - joe}
-        accessControl.checkCanSelectFromColumns(TRANSACTION_HANDLE, user("joe"), CONTEXT, new SchemaTableName("foodmart", "salary"), ImmutableSet.of("currency_id", "overtime_paid"));
+        ConnectorAccessControl accessControl = createRangerAccessControl("default-table-column-access.json", "user_groups.json");
+        // 'analyst' group have read access {group - analyst, user - joe}
+        accessControl.checkCanSelectFromColumns(TRANSACTION_HANDLE, user("joe"), CONTEXT, new SchemaTableName("foodmart", "salary"), ImmutableSet.of("salary_paid", "overtime_paid"));
 
         //  Access denied to others {group - readall, user - bob}
         assertDenied(() -> accessControl.checkCanSelectFromColumns(TRANSACTION_HANDLE, user("bob"), CONTEXT, new SchemaTableName("foodmart", "salary"), ImmutableSet.of("currency_id", "overtime_paid")));
@@ -155,9 +155,8 @@ public class TestRangerBasedAccessControl
 
     @Test
     public void testRoleBasedAccess()
-            throws IOException
     {
-        ConnectorAccessControl accessControl = createRangerAccessControl("ranger-role-based-access.json", "user_groups.json", "user_roles.json");
+        ConnectorAccessControl accessControl = createRangerAccessControl("ranger-role-based-access.json", "user_groups.json");
 
         // 'admin_role' role have all access {user - raj, group - admin, role - admin_role}
         accessControl.checkCanSelectFromColumns(TRANSACTION_HANDLE, user("raj"), CONTEXT, new SchemaTableName("default", "customer"), ImmutableSet.of("column1"));
@@ -185,38 +184,61 @@ public class TestRangerBasedAccessControl
         return new ConnectorIdentity(name, Optional.empty(), Optional.empty());
     }
 
-    private ConnectorAccessControl createRangerAccessControl(String policyFile, String usersFile, String rolesFile)
-            throws IOException
+    private ConnectorAccessControl createRangerAccessControl(String policyFile, String usersFile)
     {
-        String policyFilePath = this.getClass().getClassLoader().getResource("com.facebook.presto.hive.security.ranger/" + policyFile).getPath();
-        String usersFilePath = this.getClass().getClassLoader().getResource("com.facebook.presto.hive.security.ranger/" + usersFile).getPath();
-        String rolesFilePath = this.getClass().getClassLoader().getResource("com.facebook.presto.hive.security.ranger/" + rolesFile).getPath();
+        String policyFilePath = "com.facebook.presto.hive.security.ranger/" + policyFile;
+        String usersFilePath = "com.facebook.presto.hive.security.ranger/" + usersFile;
 
-        ServicePolicies servicePolicies = jsonParse(new File(policyFilePath), ServicePolicies.class);
-        Users users = jsonParse(new File(usersFilePath), Users.class);
-        HashMap<String, Set<String>> userRoles = Arrays.stream(jsonParse(new File(rolesFilePath), HashMap[].class)).findFirst().get();
+        HttpClient httpClient = new TestingHttpClient(httpRequest -> {
+            String uriPath = httpRequest.getUri().getPath();
+            if (uriPath.contains(RANGER_REST_POLICY_MGR_DOWNLOAD_URL)) {
+                mockHttpResponse(ByteStreams.toByteArray(this.getClass().getClassLoader().getResourceAsStream(policyFilePath)));
+            }
+            else if (uriPath.contains(RANGER_REST_USER_GROUP_URL)) {
+                mockHttpResponse(ByteStreams.toByteArray(this.getClass().getClassLoader().getResourceAsStream(usersFilePath)));
+            }
+            else if (uriPath.contains(RANGER_REST_USER_ROLES_URL)) {
+                if (uriPath.contains("raj")) {
+                    mockHttpResponse("[\"admin_role\"]".getBytes(UTF_8));
+                }
+                else if (uriPath.contains("maria")) {
+                    mockHttpResponse("[\"etl_role\"]".getBytes(UTF_8));
+                }
+                else if (uriPath.contains("sam")) {
+                    mockHttpResponse("[\"analyst_role\"]".getBytes(UTF_8));
+                }
+                else {
+                    mockHttpResponse("[\"dev_role\"]".getBytes(UTF_8));
+                }
+            }
+            return httpResponse;
+        });
 
-        Map<String, Set<String>> userRolesSet =
-                userRoles.entrySet().stream().collect(Collectors.toMap(
-                        entry -> entry.getKey(),
-                        entry -> new HashSet(entry.getValue())));
-
-        RangerBasedAccessControl rangerBasedAccessControl = new RangerBasedAccessControl();
-        RangerBasedAccessControlConfig config = new RangerBasedAccessControlConfig();
-        RangerAuthorizer rangerAuthorizer = new RangerAuthorizer(servicePolicies, config);
-        rangerBasedAccessControl.setRangerAuthorizer(rangerAuthorizer);
-        rangerBasedAccessControl.setUsers(users);
-        rangerBasedAccessControl.setUserRoles(userRolesSet);
+        RangerBasedAccessControlConfig config = new RangerBasedAccessControlConfig()
+                .setRangerHttpEndPoint("http://test")
+                .setRangerHiveServiceName("dummy");
+        RangerBasedAccessControl rangerBasedAccessControl = new RangerBasedAccessControl(config, httpClient);
         return rangerBasedAccessControl;
     }
 
-    private static <T> T jsonParse(File file, Class<T> clazz)
-            throws IOException
+    private void mockHttpResponse(byte[] answerJson)
     {
-        BufferedReader bufferedReader = new BufferedReader(new FileReader(file));
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-        return mapper.readValue(bufferedReader, clazz);
+        ImmutableListMultimap.Builder<String, String> headers = ImmutableListMultimap.builder();
+        headers.put("Content-Type", "application/json");
+        httpResponse = new TestingResponse(HttpStatus.OK, headers.build(), answerJson);
+    }
+
+    private static <T> T jsonParse(File file, Class<T> clazz)
+    {
+        try {
+            BufferedReader bufferedReader = new BufferedReader(new FileReader(file));
+            ObjectMapper mapper = new ObjectMapper();
+            mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+            return mapper.readValue(bufferedReader, clazz);
+        }
+        catch (IOException e) {
+            throw new IllegalArgumentException(format("Invalid JSON file '%s'", file.getPath()), e);
+        }
     }
 
     private static void assertDenied(ThrowingRunnable runnable)

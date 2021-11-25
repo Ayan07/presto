@@ -13,43 +13,38 @@
  */
 package com.facebook.presto.hive.security.ranger;
 
+import com.facebook.airlift.http.client.HttpClient;
+import com.facebook.airlift.http.client.Request;
 import com.facebook.airlift.json.JsonCodec;
-import com.facebook.airlift.log.Logger;
-import com.facebook.presto.client.JsonResponse;
-import com.facebook.presto.client.OkHttpUtil;
+import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.SchemaTableName;
 import com.facebook.presto.spi.connector.ConnectorAccessControl;
 import com.facebook.presto.spi.connector.ConnectorTransactionHandle;
 import com.facebook.presto.spi.security.AccessControlContext;
 import com.facebook.presto.spi.security.AccessDeniedException;
 import com.facebook.presto.spi.security.ConnectorIdentity;
-import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import okhttp3.Credentials;
-import okhttp3.HttpUrl;
-import okhttp3.Interceptor;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
+import com.google.inject.Inject;
 import org.apache.ranger.plugin.policyengine.RangerPolicyEngine;
 import org.apache.ranger.plugin.util.ServicePolicies;
-import org.jetbrains.annotations.TestOnly;
 
-import javax.inject.Inject;
-
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.net.URI;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.function.Supplier;
 
+import static com.facebook.airlift.http.client.HttpUriBuilder.uriBuilderFrom;
+import static com.facebook.airlift.http.client.JsonResponseHandler.createJsonResponseHandler;
+import static com.facebook.airlift.http.client.Request.Builder.prepareGet;
+import static com.facebook.airlift.http.client.StringResponseHandler.createStringResponseHandler;
 import static com.facebook.airlift.json.JsonCodec.jsonCodec;
+import static com.facebook.airlift.json.JsonCodec.listJsonCodec;
+import static com.facebook.presto.hive.HiveErrorCode.HIVE_RANGER_SERVER_ERROR;
 import static com.facebook.presto.hive.security.ranger.RangerBasedAccessControlConfig.RANGER_REST_POLICY_MGR_DOWNLOAD_URL;
 import static com.facebook.presto.hive.security.ranger.RangerBasedAccessControlConfig.RANGER_REST_USER_GROUP_URL;
 import static com.facebook.presto.hive.security.ranger.RangerBasedAccessControlConfig.RANGER_REST_USER_ROLES_URL;
@@ -67,9 +62,11 @@ import static com.facebook.presto.spi.security.AccessDeniedException.denyInsertT
 import static com.facebook.presto.spi.security.AccessDeniedException.denyRenameColumn;
 import static com.facebook.presto.spi.security.AccessDeniedException.denyRenameTable;
 import static com.facebook.presto.spi.security.AccessDeniedException.denySelectColumns;
-import static com.google.common.net.HttpHeaders.AUTHORIZATION;
+import static com.google.common.base.Suppliers.memoizeWithExpiration;
 import static java.lang.String.format;
+import static java.util.Objects.isNull;
 import static java.util.Objects.requireNonNull;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 /**
  * Connector access control which uses existing Ranger policies for authorizations
@@ -78,142 +75,133 @@ import static java.util.Objects.requireNonNull;
 public class RangerBasedAccessControl
         implements ConnectorAccessControl
 {
-    private static final Logger log = Logger.get(RangerBasedAccessControl.class);
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final JsonCodec<Users> USER_INFO_CODEC = jsonCodec(Users.class);
+    private static final JsonCodec<List<String>> ROLES_INFO_CODEC = listJsonCodec(String.class);
 
-    private RangerAuthorizer rangerAuthorizer;
-    private Users users;
-    private static Map<String, Set<String>> userRolesMapping = new HashMap<>();
-
-    @TestOnly
-    public RangerBasedAccessControl()
-    {
-    }
+    private final RangerAuthorizer rangerAuthorizer;
+    private final Supplier<Map<String, Set<String>>> userRolesMapping;
+    private final Supplier<Map<String, Set<String>>> userGroupsMapping;
+    private final Supplier<ServicePolicies> servicePolicies;
+    private final HttpClient httpClient;
 
     @Inject
-    public RangerBasedAccessControl(RangerBasedAccessControlConfig config)
+    public RangerBasedAccessControl(RangerBasedAccessControlConfig config, @ForRangerInfo HttpClient httpClient)
     {
+        requireNonNull(config, "config is null");
         requireNonNull(config.getRangerHttpEndPoint(), "Ranger service http end point is null");
         requireNonNull(config.getRangerHiveServiceName(), "Ranger hive service name is null");
+        this.httpClient = requireNonNull(httpClient, "httpClient is null");
 
-        ServicePolicies servicePolicies;
         try {
-            OkHttpClient client = getAuthHttpClient(config);
-            HttpUrl hiveServicePolicyUrl = requireNonNull(HttpUrl.get(URI.create(config.getRangerHttpEndPoint())))
-                    .newBuilder()
-                    .encodedPath(RANGER_REST_POLICY_MGR_DOWNLOAD_URL + "/" + config.getRangerHiveServiceName()).build();
+            servicePolicies = memoizeWithExpiration(
+                    () -> getHiveServicePolicies(config),
+                    config.getRefreshPeriod().toMillis(),
+                    MILLISECONDS);
 
-            HttpUrl getUsersUrl = requireNonNull(HttpUrl.get(URI.create(config.getRangerHttpEndPoint())))
-                    .newBuilder()
-                    .encodedPath(RANGER_REST_USER_GROUP_URL)
-                    .build();
+            userGroupsMapping = memoizeWithExpiration(
+                    () -> getUserGroupsMappings(config),
+                    config.getRefreshPeriod().toMillis(),
+                    MILLISECONDS);
 
-            servicePolicies = getHiveServicePolicies(client, hiveServicePolicyUrl);
-            users = getUsers(client, getUsersUrl);
+            userRolesMapping = memoizeWithExpiration(
+                    () -> getRolesForUserList(config),
+                    config.getRefreshPeriod().toMillis(),
+                    MILLISECONDS);
+
             rangerAuthorizer = new RangerAuthorizer(servicePolicies, config);
-            userRolesMapping = getRolesForUserList(client, config.getRangerHttpEndPoint());
         }
         catch (Exception e) {
-            log.error(e, "Exception while querying ranger service ");
-            throw new AccessDeniedException("Exception while querying ranger service ");
+            throw new RuntimeException("Unable to query ranger service ", e);
         }
     }
 
-    private ServicePolicies getHiveServicePolicies(OkHttpClient client, HttpUrl httpUrl)
-            throws IOException
+    private ServicePolicies getHiveServicePolicies(RangerBasedAccessControlConfig config)
     {
-        Response response = doRequest(client, httpUrl);
-        if (!response.isSuccessful()) {
-            throw new RuntimeException(format("Request to %s failed: [Error: %s]", httpUrl, response));
+        URI uri = uriBuilderFrom(URI.create(config.getRangerHttpEndPoint()))
+                .appendPath(RANGER_REST_POLICY_MGR_DOWNLOAD_URL + "/" + config.getRangerHiveServiceName())
+                .build();
+        Request request = setContentTypeHeaders(prepareGet())
+                .setUri(uri)
+                .build();
+        try {
+            return OBJECT_MAPPER.readValue(httpClient.execute(request, createStringResponseHandler()).getBody(), ServicePolicies.class);
         }
-
-        return jsonParse(response, ServicePolicies.class);
-    }
-
-    private Users getUsers(OkHttpClient client, HttpUrl endPtUri)
-    {
-        Request request = new Request.Builder().url(endPtUri).header("Accept", "application/json").build();
-
-        JsonCodec<Users> usersJsonCodec = jsonCodec(Users.class);
-        JsonResponse<Users> users = JsonResponse.execute(usersJsonCodec, client, request);
-        if (!users.hasValue()) {
-            throw new RuntimeException(format("Request to %s failed: %s [Error: %s]", endPtUri, users, users.getResponseBody()));
+        catch (IOException e) {
+            throw new PrestoException(HIVE_RANGER_SERVER_ERROR, format("Unable to fetch policies from %s hive service end point", config.getRangerHiveServiceName()));
         }
-
-        return users.getValue();
     }
 
-    private Map<String, Set<String>> getRolesForUserList(OkHttpClient client, String rangerEndPoint)
+    private Users getUsers(RangerBasedAccessControlConfig config)
     {
-        List<String> usersList = users.getvXUsers().stream().map(VXUser::getName).collect(Collectors.toList());
-        HttpUrl getRolesUrl;
-        for (String user : usersList) {
-            getRolesUrl = requireNonNull(HttpUrl.get(URI.create(rangerEndPoint)))
-                    .newBuilder()
-                    .encodedPath(RANGER_REST_USER_ROLES_URL + "/" + user)
-                    .build();
-            userRolesMapping.put(user, getRolesForUser(client, getRolesUrl));
+        URI uri = uriBuilderFrom(URI.create(config.getRangerHttpEndPoint()))
+                .appendPath(RANGER_REST_USER_GROUP_URL)
+                .build();
+        Request request = setContentTypeHeaders(prepareGet())
+                .setUri(uri)
+                .build();
+
+        return httpClient.execute(request, createJsonResponseHandler(USER_INFO_CODEC));
+    }
+
+    private static Request.Builder setContentTypeHeaders(Request.Builder requestBuilder)
+    {
+        return requestBuilder
+                .setHeader("Accept", "application/json");
+    }
+
+    private Map<String, Set<String>> getRolesForUserList(RangerBasedAccessControlConfig config)
+    {
+        Users users = getUsers(config);
+        ImmutableMap.Builder<String, Set<String>> userRolesMapping = ImmutableMap.builder();
+        for (VXUser vxUser : users.getvXUsers()) {
+            userRolesMapping.put(vxUser.getName(), getRolesForUser(vxUser.getName(), config));
         }
-        return userRolesMapping;
+        return userRolesMapping.build();
     }
 
-    private Set<String> getRolesForUser(OkHttpClient client, HttpUrl endPtUri)
+    private Set<String> getRolesForUser(String userName, RangerBasedAccessControlConfig config)
     {
-        Request request = new Request.Builder().url(endPtUri).header("Accept", "application/json").build();
-        JsonCodec<List> rolesJsonCodec = jsonCodec(List.class);
-        JsonResponse<List> roles = JsonResponse.execute(rolesJsonCodec, client, request);
-        if (!roles.hasValue()) {
-            throw new RuntimeException(format("Request to %s failed: %s [Error: %s]", endPtUri, roles, roles.getResponseBody()));
-        }
-        return new HashSet<>(roles.getValue());
+        URI uri = uriBuilderFrom(URI.create(config.getRangerHttpEndPoint()))
+                .appendPath(RANGER_REST_USER_ROLES_URL + "/" + userName)
+                .build();
+        Request request = setContentTypeHeaders(prepareGet())
+                .setUri(uri)
+                .build();
+
+        return ImmutableSet.copyOf(httpClient.execute(request, createJsonResponseHandler(ROLES_INFO_CODEC)));
     }
 
-    @TestOnly
-    public void setRangerAuthorizer(RangerAuthorizer rangerAuthorizer)
+    private Map<String, Set<String>> getUserGroupsMappings(RangerBasedAccessControlConfig config)
     {
-        this.rangerAuthorizer = rangerAuthorizer;
-    }
-
-    @TestOnly
-    public void setUsers(Users users)
-    {
-        this.users = users;
-    }
-
-    @TestOnly
-    public void setUserRoles(Map<String, Set<String>> userRolesMapping)
-    {
-        this.userRolesMapping = userRolesMapping;
-    }
-
-    private static <T> T jsonParse(Response response, Class<T> clazz)
-            throws IOException
-    {
-        if (response.body() != null) {
-            try (BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(response.body().byteStream()))) {
-                ObjectMapper mapper = new ObjectMapper();
-                mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-                return mapper.readValue(bufferedReader, clazz);
+        Users users = getUsers(config);
+        ImmutableMap.Builder<String, Set<String>> userGroupsMapping = ImmutableMap.builder();
+        for (VXUser vxUser : users.getvXUsers()) {
+            if (!(isNull(vxUser.getGroupNameList()) || vxUser.getGroupNameList().isEmpty())) {
+                userGroupsMapping.put(vxUser.getName(), ImmutableSet.copyOf(vxUser.getGroupNameList()));
             }
         }
-        return null;
-    }
-
-    private boolean userExists(String userName)
-    {
-        return users.getvXUsers().stream()
-                .anyMatch(user -> userName.equalsIgnoreCase(user.getName()));
+        return userGroupsMapping.build();
     }
 
     private Set<String> getGroupsForUser(String username)
     {
-        if (userExists(username)) {
-            return new HashSet<>(users.getvXUsers().stream()
-                    .filter(user -> username.equalsIgnoreCase(user.getName()))
-                    .findFirst()
-                    .get()
-                    .getGroupNameList());
+        try {
+            return userGroupsMapping.get().get(username);
         }
-        return null;
+        catch (Exception ex) {
+            throw new PrestoException(HIVE_RANGER_SERVER_ERROR, "Unable to fetch user groups information from ranger", ex);
+        }
+    }
+
+    private Set<String> getRolesForUser(String username)
+    {
+        try {
+            return userRolesMapping.get().get(username);
+        }
+        catch (Exception ex) {
+            throw new PrestoException(HIVE_RANGER_SERVER_ERROR, "Unable to fetch user roles information from ranger", ex);
+        }
     }
 
     enum HiveAccessType
@@ -224,7 +212,7 @@ public class RangerBasedAccessControl
     private boolean checkAccess(ConnectorIdentity identity, SchemaTableName tableName, String column, HiveAccessType accessType)
     {
         return rangerAuthorizer.authorizeHiveResource(tableName.getSchemaName(), tableName.getTableName(), column,
-                accessType.toString(), identity.getUser(), getGroupsForUser(identity.getUser()), userRolesMapping.get(identity.getUser()));
+                accessType.toString(), identity.getUser(), getGroupsForUser(identity.getUser()), getRolesForUser(identity.getUser()));
     }
 
     /**
@@ -235,7 +223,7 @@ public class RangerBasedAccessControl
     public void checkCanCreateSchema(ConnectorTransactionHandle transactionHandle, ConnectorIdentity identity, AccessControlContext context, String schemaName)
     {
         if (!rangerAuthorizer.authorizeHiveResource(schemaName, null, null,
-                HiveAccessType.CREATE.toString(), identity.getUser(), getGroupsForUser(identity.getUser()), userRolesMapping.get(identity.getUser()))) {
+                HiveAccessType.CREATE.toString(), identity.getUser(), getGroupsForUser(identity.getUser()), getRolesForUser(identity.getUser()))) {
             denyCreateSchema(schemaName, format("Access denied - User [ %s ] does not have [CREATE] " +
                     "privilege on [ %s ] ", identity.getUser(), schemaName));
         }
@@ -249,7 +237,7 @@ public class RangerBasedAccessControl
     public void checkCanDropSchema(ConnectorTransactionHandle transactionHandle, ConnectorIdentity identity, AccessControlContext context, String schemaName)
     {
         if (!rangerAuthorizer.authorizeHiveResource(schemaName, null, null,
-                HiveAccessType.DROP.toString(), identity.getUser(), getGroupsForUser(identity.getUser()), userRolesMapping.get(identity.getUser()))) {
+                HiveAccessType.DROP.toString(), identity.getUser(), getGroupsForUser(identity.getUser()), getRolesForUser(identity.getUser()))) {
             denyDropSchema(schemaName, format("Access denied - User [ %s ] does not have [DROP] " +
                     "privilege on [ %s ] ", identity.getUser(), schemaName));
         }
@@ -277,7 +265,7 @@ public class RangerBasedAccessControl
     {
         Set<String> allowedSchemas = new HashSet<>();
         Set<String> groups = getGroupsForUser(identity.getUser());
-        Set<String> roles = userRolesMapping.get(identity.getUser());
+        Set<String> roles = getRolesForUser(identity.getUser());
 
         for (String schema : schemaNames) {
             if (rangerAuthorizer.authorizeHiveResource(schema, null, null, RangerPolicyEngine.ANY_ACCESS, identity.getUser(), groups, roles)) {
@@ -309,7 +297,7 @@ public class RangerBasedAccessControl
     {
         Set<SchemaTableName> allowedTables = new HashSet<>();
         Set<String> groups = getGroupsForUser(identity.getUser());
-        Set<String> roles = userRolesMapping.get(identity.getUser());
+        Set<String> roles = getRolesForUser(identity.getUser());
 
         for (SchemaTableName table : tableNames) {
             if (rangerAuthorizer.authorizeHiveResource(table.getSchemaName(), table.getTableName(), null, RangerPolicyEngine.ANY_ACCESS, identity.getUser(), groups, roles)) {
@@ -511,39 +499,5 @@ public class RangerBasedAccessControl
     @Override
     public void checkCanSetCatalogSessionProperty(ConnectorTransactionHandle transactionHandle, ConnectorIdentity identity, AccessControlContext context, String propertyName)
     {
-    }
-
-    private static Response doRequest(OkHttpClient httpClient, HttpUrl anyURL)
-            throws IOException
-    {
-        Request request = new Request.Builder().url(anyURL).header("Accept", "application/json").build();
-        Response response = httpClient.newCall(request).execute();
-        if (!response.isSuccessful()) {
-            throw new IOException("Unexpected code " + response);
-        }
-        return response;
-    }
-
-    public static Interceptor basicAuth(String user, String password)
-    {
-        requireNonNull(user, "user is null");
-        requireNonNull(password, "password is null");
-
-        String credential = Credentials.basic(user, password);
-        return chain -> chain.proceed(chain.request().newBuilder()
-                .header(AUTHORIZATION, credential)
-                .build());
-    }
-
-    private static OkHttpClient getAuthHttpClient(RangerBasedAccessControlConfig controlConfig)
-    {
-        OkHttpClient httpClient = new OkHttpClient.Builder().build();
-        OkHttpClient.Builder builder = httpClient.newBuilder();
-        OkHttpUtil.setupSsl(builder, Optional.ofNullable(controlConfig.getRangerRestKeystorePath()),
-                Optional.ofNullable(controlConfig.getRangerRestKeystorePwd()),
-                Optional.ofNullable(controlConfig.getRangerRestTruststorePath()),
-                Optional.ofNullable(controlConfig.getRangerRestTruststorePwd()));
-        builder.addInterceptor(basicAuth(controlConfig.getBasicAuthUser(), controlConfig.getBasicAuthPassword()));
-        return builder.build();
     }
 }

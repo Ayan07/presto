@@ -14,41 +14,31 @@
 
 package com.facebook.presto.hive.security.ranger;
 
-import com.facebook.airlift.log.Logger;
-import com.facebook.presto.plugin.base.security.ForwardingConnectorAccessControl;
+import com.facebook.airlift.configuration.AbstractConfigurationAwareModule;
 import com.facebook.presto.spi.connector.ConnectorAccessControl;
 import com.google.inject.Binder;
-import com.google.inject.Inject;
-import com.google.inject.Module;
-import com.google.inject.Provides;
+import com.google.inject.Scopes;
 
 import static com.facebook.airlift.configuration.ConfigBinder.configBinder;
-import static com.google.common.base.Suppliers.memoizeWithExpiration;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static com.facebook.airlift.http.client.HttpClientBinder.httpClientBinder;
 
 public class RangerBasedAccessControlModule
-        implements Module
+        extends AbstractConfigurationAwareModule
 {
-    private static final Logger log = Logger.get(RangerBasedAccessControlModule.class);
-
     @Override
-    public void configure(Binder binder)
+    public void setup(Binder binder)
     {
         configBinder(binder).bindConfig(RangerBasedAccessControlConfig.class);
-    }
+        binder.bind(ConnectorAccessControl.class).to(RangerBasedAccessControl.class).in(Scopes.SINGLETON);
 
-    @Inject
-    @Provides
-    public ConnectorAccessControl getConnectorAccessControl(RangerBasedAccessControlConfig config)
-    {
-        if (config.getRefreshPeriod() != null) {
-            return ForwardingConnectorAccessControl.of(memoizeWithExpiration(
-                    () -> {
-                        return new RangerBasedAccessControl(config);
-                    },
-                    config.getRefreshPeriod().toMillis(),
-                    MILLISECONDS));
+        RangerBasedAccessControlConfig rangerConfig = buildConfigObject(RangerBasedAccessControlConfig.class);
+        if (rangerConfig.getBasicAuthUser() != null && rangerConfig.getBasicAuthPassword() != null) {
+            httpClientBinder(binder).bindHttpClient("ranger", ForRangerInfo.class)
+                    .withConfigDefaults(config -> config.setAuthenticationEnabled(false))
+                    .withFilter(RangerBasicAuthHttpRequestFilter.class);
         }
-        return new RangerBasedAccessControl(config);
+        else {
+            httpClientBinder(binder).bindHttpClient("ranger", ForRangerInfo.class);
+        }
     }
 }

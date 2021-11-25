@@ -15,6 +15,7 @@ package com.facebook.presto.hive.security.ranger;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.common.collect.ImmutableList;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -53,7 +54,7 @@ public class Users
         this.sortType = sortType;
         this.startIndex = startIndex;
         this.totalCount = totalCount;
-        this.vXUsers = requireNonNull(vXUsers, "vXUsers is null");
+        this.vXUsers = ImmutableList.copyOf(requireNonNull(vXUsers, "vXUsers is null"));
     }
 
     @JsonProperty

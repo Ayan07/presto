@@ -16,6 +16,7 @@ package com.facebook.presto.hive.security.ranger;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.common.collect.ImmutableList;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -71,7 +72,7 @@ public class VXUser
         this.password = password;
         this.status = status;
         this.updateDate = updateDate;
-        this.userRoleList = userRoleList;
+        this.userRoleList = userRoleList == null ? null : ImmutableList.copyOf(userRoleList);
         this.userSource = userSource;
     }
 

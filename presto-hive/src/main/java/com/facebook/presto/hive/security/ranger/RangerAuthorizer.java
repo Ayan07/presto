@@ -13,8 +13,8 @@
  */
 package com.facebook.presto.hive.security.ranger;
 
-import com.amazonaws.util.StringUtils;
 import com.facebook.airlift.log.Logger;
+import com.facebook.presto.spi.PrestoException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.ranger.audit.provider.AuditProviderFactory;
 import org.apache.ranger.authorization.hadoop.config.RangerPluginConfig;
@@ -30,18 +30,30 @@ import org.apache.ranger.plugin.util.ServicePolicies;
 import java.io.File;
 import java.net.MalformedURLException;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
+import static com.facebook.presto.hive.HiveErrorCode.HIVE_RANGER_SERVER_ERROR;
+import static com.google.common.base.Strings.isNullOrEmpty;
 import static java.util.Locale.ENGLISH;
+import static java.util.Objects.requireNonNull;
 
 public class RangerAuthorizer
 {
-    private static final Logger LOG = Logger.get(RangerAuthorizer.class);
-    private final RangerBasePlugin plugin;
-    public static final String CLUSTER_NAME = "Presto";
-    public static final String HIVE = "hive";
+    private static final Logger log = Logger.get(RangerAuthorizer.class);
+    private static final String KEY_DATABASE = "database";
+    private static final String KEY_TABLE = "table";
+    private static final String KEY_COLUMN = "column";
+    private static final String CLUSTER_NAME = "Presto";
+    private static final String HIVE = "hive";
 
-    public RangerAuthorizer(ServicePolicies servicePolicies, RangerBasedAccessControlConfig rangerBasedAccessControlConfig)
+    private final RangerBasePlugin plugin;
+    private final Supplier<ServicePolicies> servicePolicies;
+    private final AtomicReference<ServicePolicies> currentServicePolicies = new AtomicReference<>();
+
+    public RangerAuthorizer(Supplier<ServicePolicies> servicePolicies, RangerBasedAccessControlConfig rangerBasedAccessControlConfig)
     {
+        this.servicePolicies = requireNonNull(servicePolicies, "ServicePolicies is null");
         RangerPolicyEngineOptions rangerPolicyEngineOptions = new RangerPolicyEngineOptions();
         Configuration conf = new Configuration();
         rangerPolicyEngineOptions.configureDefaultRangerAdmin(conf, "hive");
@@ -50,12 +62,12 @@ public class RangerAuthorizer
         plugin = new RangerBasePlugin(rangerPluginConfig);
 
         String hiveAuditPath = rangerBasedAccessControlConfig.getRangerHiveAuditPath();
-        if (!StringUtils.isNullOrEmpty(hiveAuditPath)) {
+        if (!isNullOrEmpty(hiveAuditPath)) {
             try {
                 plugin.getConfig().addResource(new File(hiveAuditPath).toURI().toURL());
             }
             catch (MalformedURLException e) {
-                e.printStackTrace();
+                log.error(e, "Invalid audit file is provided ");
             }
         }
 
@@ -66,32 +78,47 @@ public class RangerAuthorizer
                 providerFactory.init(plugin.getConfig().getProperties(), HIVE);
             }
             else {
-                LOG.info("Audit subsystem is not initialized correctly. Please check audit configuration. ");
-                LOG.info("No authorization audits will be generated. ");
+                log.info("Audit subsystem is not initialized correctly. Please check audit configuration. ");
+                log.info("No authorization audits will be generated. ");
             }
         }
 
         plugin.setResultProcessor(new RangerDefaultAuditHandler());
-        plugin.setPolicies(servicePolicies);
+    }
+
+    private void updateRangerPolicies()
+    {
+        ServicePolicies newServicePolicies = getRangerServicePolicies();
+        ServicePolicies existingServicePolicies = currentServicePolicies.get();
+        if (newServicePolicies != existingServicePolicies && currentServicePolicies.compareAndSet(existingServicePolicies, newServicePolicies)) {
+            plugin.setPolicies(newServicePolicies);
+        }
+    }
+
+    private ServicePolicies getRangerServicePolicies()
+    {
+        try {
+            return servicePolicies.get();
+        }
+        catch (Exception ex) {
+            throw new PrestoException(HIVE_RANGER_SERVER_ERROR, "Unable to fetch policy information from ranger", ex);
+        }
     }
 
     public boolean authorizeHiveResource(String database, String table, String column, String accessType, String user, Set<String> userGroups, Set<String> userRoles)
     {
-        final String keyDatabase = "database";
-        final String keyTable = "table";
-        final String keyColumn = "column";
-
+        updateRangerPolicies();
         RangerAccessResourceImpl resource = new RangerAccessResourceImpl();
-        if (!StringUtils.isNullOrEmpty(database)) {
-            resource.setValue(keyDatabase, database);
+        if (!isNullOrEmpty(database)) {
+            resource.setValue(KEY_DATABASE, database);
         }
 
-        if (!StringUtils.isNullOrEmpty(table)) {
-            resource.setValue(keyTable, table);
+        if (!isNullOrEmpty(table)) {
+            resource.setValue(KEY_TABLE, table);
         }
 
-        if (!StringUtils.isNullOrEmpty(column)) {
-            resource.setValue(keyColumn, column);
+        if (!isNullOrEmpty(column)) {
+            resource.setValue(KEY_COLUMN, column);
         }
 
         RangerAccessRequest request = new RangerAccessRequestImpl(resource, accessType.toLowerCase(ENGLISH), user, userGroups, userRoles);

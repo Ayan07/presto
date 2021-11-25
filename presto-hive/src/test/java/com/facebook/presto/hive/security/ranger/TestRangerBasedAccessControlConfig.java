@@ -29,10 +29,6 @@ import static com.facebook.presto.hive.security.ranger.RangerBasedAccessControlC
 import static com.facebook.presto.hive.security.ranger.RangerBasedAccessControlConfig.RANGER_HTTP_END_POINT;
 import static com.facebook.presto.hive.security.ranger.RangerBasedAccessControlConfig.RANGER_POLICY_REFRESH_PERIOD;
 import static com.facebook.presto.hive.security.ranger.RangerBasedAccessControlConfig.RANGER_REST_POLICY_HIVE_SERVICE_NAME;
-import static com.facebook.presto.hive.security.ranger.RangerBasedAccessControlConfig.RANGER_REST_POLICY_MGR_KEYSTORE_PATH;
-import static com.facebook.presto.hive.security.ranger.RangerBasedAccessControlConfig.RANGER_REST_POLICY_MGR_KEYSTORE_PWD;
-import static com.facebook.presto.hive.security.ranger.RangerBasedAccessControlConfig.RANGER_REST_POLICY_MGR_TRUST_STORE_PATH;
-import static com.facebook.presto.hive.security.ranger.RangerBasedAccessControlConfig.RANGER_REST_POLICY_MGR_TRUST_STORE_PWD;
 import static com.facebook.presto.hive.security.ranger.RangerBasedAccessControlConfig.RANGER_REST_USER_GROUPS_AUTH_PASSWORD;
 import static com.facebook.presto.hive.security.ranger.RangerBasedAccessControlConfig.RANGER_REST_USER_GROUPS_AUTH_USERNAME;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -48,11 +44,7 @@ public class TestRangerBasedAccessControlConfig
                 .setRangerHiveServiceName(null)
                 .setBasicAuthUser(null)
                 .setBasicAuthPassword(null)
-                .setRangerHiveAuditPath(null)
-                .setRangerRestKeystorePath(null)
-                .setRangerRestKeystorePwd(null)
-                .setRangerRestTruststorePath(null)
-                .setRangerRestTruststorePwd(null));
+                .setRangerHiveAuditPath(null));
     }
 
     @Test
@@ -65,10 +57,6 @@ public class TestRangerBasedAccessControlConfig
                 .put(RANGER_REST_USER_GROUPS_AUTH_USERNAME, "admin")
                 .put(RANGER_REST_USER_GROUPS_AUTH_PASSWORD, "admin")
                 .put(RANGER_HIVE_AUDIT_PATH, "audit_path")
-                .put(RANGER_REST_POLICY_MGR_KEYSTORE_PATH, "key_path")
-                .put(RANGER_REST_POLICY_MGR_KEYSTORE_PWD, "key_pwd")
-                .put(RANGER_REST_POLICY_MGR_TRUST_STORE_PATH, "trust_path")
-                .put(RANGER_REST_POLICY_MGR_TRUST_STORE_PWD, "trust_pwd")
                 .build();
 
         RangerBasedAccessControlConfig expected = new RangerBasedAccessControlConfig()
@@ -77,11 +65,7 @@ public class TestRangerBasedAccessControlConfig
                 .setRangerHiveServiceName("hiveServiceName")
                 .setBasicAuthUser("admin")
                 .setBasicAuthPassword("admin")
-                .setRangerHiveAuditPath("audit_path")
-                .setRangerRestKeystorePath("key_path")
-                .setRangerRestKeystorePwd("key_pwd")
-                .setRangerRestTruststorePath("trust_path")
-                .setRangerRestTruststorePwd("trust_pwd");
+                .setRangerHiveAuditPath("audit_path");
         assertFullMapping(properties, expected);
     }
 
@@ -112,22 +96,6 @@ public class TestRangerBasedAccessControlConfig
                 RANGER_REST_USER_GROUPS_AUTH_PASSWORD, "admin")))
                 .isInstanceOf(ConfigurationException.class)
                 .hasMessageContaining("Invalid configuration property hive.ranger.policy.hive-servicename: may not be null");
-
-        assertThatThrownBy(() -> newInstance(ImmutableMap.of(
-                RANGER_POLICY_REFRESH_PERIOD, "120s",
-                RANGER_HTTP_END_POINT, "http://test:6080",
-                RANGER_REST_POLICY_HIVE_SERVICE_NAME, "hive",
-                RANGER_REST_USER_GROUPS_AUTH_PASSWORD, "admin")))
-                .isInstanceOf(ConfigurationException.class)
-                .hasMessageContaining("Invalid configuration property hive.ranger.service.basic-auth-username: may not be null");
-
-        assertThatThrownBy(() -> newInstance(ImmutableMap.of(
-                RANGER_POLICY_REFRESH_PERIOD, "120s",
-                RANGER_HTTP_END_POINT, "http://test:6080",
-                RANGER_REST_POLICY_HIVE_SERVICE_NAME, "hive",
-                RANGER_REST_USER_GROUPS_AUTH_USERNAME, "admin")))
-                .isInstanceOf(ConfigurationException.class)
-                .hasMessageContaining("Invalid configuration property hive.ranger.service.basic-auth-password: may not be null");
     }
 
     private static RangerBasedAccessControlConfig newInstance(Map<String, String> properties)

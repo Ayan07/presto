@@ -608,13 +608,13 @@ Property Name                                      Description                  
 
 ``hive.ranger.audit.path``                         Ranger Audit configuration - ranger audit file path
 
-``hive.ranger.service.keystore.path``              Ranger SSL configuration - client keystore file path
+``ranger.http-client.key-store-path``              Ranger SSL configuration - client keystore file path
 
-``hive.ranger.service.keystore.password``          Ranger SSL configuration - client keystore password
+``ranger.http-client.key-store-password``          Ranger SSL configuration - client keystore password
 
-``hive.ranger.service.truststore.path``            Ranger SSL configuration - client trust-store file path
+``ranger.http-client.trust-store-path``            Ranger SSL configuration - client trust-store file path
 
-``hive.ranger.service.truststore.password``        Ranger SSL configuration - client trust-store password
+``ranger.http-client.trust-store-password``        Ranger SSL configuration - client trust-store password
 
 ================================================== ============================================================ ============
 
