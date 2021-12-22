@@ -70,6 +70,14 @@
 
         <dependency>
             <groupId>com.facebook.presto</groupId>
+            <artifactId>presto-clickhouse</artifactId>
+            <version>${project.version}</version>
+            <type>zip</type>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>com.facebook.presto</groupId>
             <artifactId>presto-session-property-managers</artifactId>
             <version>${project.version}</version>
             <type>zip</type>
