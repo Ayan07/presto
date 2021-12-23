@@ -15,24 +15,11 @@ package com.facebook.presto.plugin.clickhouse;
 
 import com.facebook.airlift.configuration.ConfigBinder;
 import com.facebook.presto.plugin.jdbc.BaseJdbcConfig;
-import com.facebook.presto.plugin.jdbc.ConnectionFactory;
-import com.facebook.presto.plugin.jdbc.DriverConnectionFactory;
 import com.facebook.presto.plugin.jdbc.JdbcClient;
 import com.google.inject.Binder;
 import com.google.inject.Module;
-import com.google.inject.Provides;
 import com.google.inject.Scopes;
-import com.google.inject.Singleton;
 import org.apache.http.client.methods.HttpPost;
-import org.apache.http.util.Asserts;
-import ru.yandex.clickhouse.ClickHouseDriver;
-
-import java.sql.Driver;
-import java.sql.SQLException;
-import java.util.Optional;
-import java.util.Properties;
-
-import static com.facebook.presto.plugin.jdbc.DriverConnectionFactory.basicConnectionProperties;
 
 public class ClickhouseClientModule
         implements Module

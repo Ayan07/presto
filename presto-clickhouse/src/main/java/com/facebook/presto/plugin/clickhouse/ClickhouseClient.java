@@ -42,10 +42,10 @@ public class ClickhouseClient
     private final int numberDefaultScale;
 
     @Inject
-    public ClickhouseClient(JdbcConnectorId connectorId,
-                            BaseJdbcConfig config,
-                            ClickhouseConfig clickhouseConfig) throws SQLException {
-        super(connectorId, config, "", connectionFactory(config,clickhouseConfig));
+    public ClickhouseClient(JdbcConnectorId connectorId, BaseJdbcConfig config, ClickhouseConfig clickhouseConfig)
+            throws SQLException
+    {
+        super(connectorId, config, "", connectionFactory(config, clickhouseConfig));
         requireNonNull(clickhouseConfig, "clickhouse config is null");
         this.numberDefaultScale = clickhouseConfig.getNumberDefaultScale();
     }
@@ -53,19 +53,17 @@ public class ClickhouseClient
     public static ConnectionFactory connectionFactory(BaseJdbcConfig config, ClickhouseConfig clickhouseConfig)
             throws SQLException
     {
-//        Properties connectionProperties = new Properties();
-                Properties connectionProperties = basicConnectionProperties(config);
+        //        Properties connectionProperties = new Properties();
+        Properties connectionProperties = basicConnectionProperties(config);
         Asserts.notEmpty(config.getConnectionUrl(), "connection-url");
         return (ConnectionFactory) new DriverConnectionFactory((Driver) new ClickHouseDriver(),
-                config.getConnectionUrl(),
-                Optional.ofNullable(config.getUserCredentialName()),
-                Optional.ofNullable(config.getPasswordCredentialName()),
-                connectionProperties);
+                config.getConnectionUrl(), Optional.ofNullable(config.getUserCredentialName()),
+                Optional.ofNullable(config.getPasswordCredentialName()), connectionProperties);
     }
 
     private String[] getTableTypes()
     {
-        return new String[]{"TABLE", "VIEW"};
+        return new String[] {"TABLE", "VIEW"};
     }
 
     protected ResultSet getTables(Connection connection, Optional<String> schemaName, Optional<String> tableName)
@@ -73,10 +71,9 @@ public class ClickhouseClient
     {
         DatabaseMetaData metadata = connection.getMetaData();
         String escape = metadata.getSearchStringEscape();
-        return metadata.getTables(connection.getCatalog(),
-                escapeNamePattern(schemaName, Optional.of(escape)).orElse(null),
-                escapeNamePattern(tableName, Optional.of(escape)).orElse(null),
-                getTableTypes());
+        return metadata
+                .getTables(connection.getCatalog(), escapeNamePattern(schemaName, Optional.of(escape)).orElse(null),
+                        escapeNamePattern(tableName, Optional.of(escape)).orElse(null), getTableTypes());
     }
 
     public PreparedStatement getPreparedStatement(Connection connection, String sql) throws SQLException
@@ -87,9 +84,7 @@ public class ClickhouseClient
     }
 
     /**
-     *
      * clickhouse sql no quote to delimit fields or schema or table
-     * @author zhzhenqin@163.com
      *
      * @param session
      * @param connection
@@ -97,21 +92,14 @@ public class ClickhouseClient
      * @param columnHandles
      * @return
      * @throws SQLException
+     * @author zhzhenqin@163.com
      */
-    @Override
-    public PreparedStatement buildSql(ConnectorSession session, Connection connection, JdbcSplit split, List<JdbcColumnHandle> columnHandles)
-            throws SQLException
+    @Override public PreparedStatement buildSql(ConnectorSession session, Connection connection, JdbcSplit split,
+            List<JdbcColumnHandle> columnHandles) throws SQLException
     {
-        return new QueryBuilder(identifierQuote).buildSql(
-                this,
-                session,
-                connection,
-                "",
-                split.getSchemaName(),
-                split.getTableName(),
-                columnHandles,
-                split.getTupleDomain(),
-                split.getAdditionalPredicate());
+        return new QueryBuilder(identifierQuote)
+                .buildSql(this, session, connection, "", split.getSchemaName(), split.getTableName(), columnHandles,
+                        split.getTupleDomain(), split.getAdditionalPredicate());
     }
 
     protected String generateTemporaryTableName()
@@ -119,15 +107,17 @@ public class ClickhouseClient
         return "presto_tmp_" + System.nanoTime();
     }
 
-    protected void renameTable(JdbcIdentity identity, String catalogName, SchemaTableName oldTable, SchemaTableName newTable)
+    protected void renameTable(JdbcIdentity identity, String catalogName, SchemaTableName oldTable,
+            SchemaTableName newTable)
     {
         if (!oldTable.getSchemaName().equalsIgnoreCase(newTable.getSchemaName())) {
-            throw new PrestoException(StandardErrorCode.NOT_SUPPORTED, "Table rename across schemas is not supported in Oracle");
+            throw new PrestoException(StandardErrorCode.NOT_SUPPORTED,
+                    "Table rename across schemas is not supported in Oracle");
         }
         String newTableName = newTable.getTableName().toUpperCase(Locale.ENGLISH);
         String oldTableName = oldTable.getTableName().toUpperCase(Locale.ENGLISH);
         String sql = String.format("ALTER TABLE %s RENAME TO %s",
-                new Object[]{quoted(catalogName, oldTable.getSchemaName(), oldTableName), quoted(newTableName)});
+                new Object[] {quoted(catalogName, oldTable.getSchemaName(), oldTableName), quoted(newTableName)});
         try (Connection connection = this.connectionFactory.openConnection(identity)) {
             execute(connection, sql);
         }
@@ -158,12 +148,15 @@ public class ClickhouseClient
                     return Optional.of(StandardReadMappings.bigintReadMapping());
                 }
                 if (scale < 0 || scale > precision) {
-                    return Optional.of(StandardReadMappings.decimalReadMapping(DecimalType.createDecimalType(precision, this.numberDefaultScale)));
+                    return Optional.of(StandardReadMappings
+                            .decimalReadMapping(DecimalType.createDecimalType(precision, this.numberDefaultScale)));
                 }
-                return Optional.of(StandardReadMappings.decimalReadMapping(DecimalType.createDecimalType(precision, scale)));
+                return Optional
+                        .of(StandardReadMappings.decimalReadMapping(DecimalType.createDecimalType(precision, scale)));
             case Types.LONGVARCHAR:
                 if (columnSize > 2147483646 || columnSize == 0) {
-                    return Optional.of(StandardReadMappings.varcharReadMapping(VarcharType.createUnboundedVarcharType()));
+                    return Optional
+                            .of(StandardReadMappings.varcharReadMapping(VarcharType.createUnboundedVarcharType()));
                 }
                 return Optional.of(StandardReadMappings.varcharReadMapping(VarcharType.createVarcharType(columnSize)));
             case Types.VARCHAR:
