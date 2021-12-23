@@ -15,35 +15,23 @@ package com.facebook.presto.plugin.clickhouse;
 
 import com.facebook.presto.common.type.DecimalType;
 import com.facebook.presto.common.type.VarcharType;
-import com.facebook.presto.plugin.jdbc.BaseJdbcClient;
-import com.facebook.presto.plugin.jdbc.BaseJdbcConfig;
-import com.facebook.presto.plugin.jdbc.ConnectionFactory;
-import com.facebook.presto.plugin.jdbc.JdbcColumnHandle;
-import com.facebook.presto.plugin.jdbc.JdbcConnectorId;
-import com.facebook.presto.plugin.jdbc.JdbcErrorCode;
-import com.facebook.presto.plugin.jdbc.JdbcIdentity;
-import com.facebook.presto.plugin.jdbc.JdbcSplit;
-import com.facebook.presto.plugin.jdbc.JdbcTypeHandle;
-import com.facebook.presto.plugin.jdbc.QueryBuilder;
-import com.facebook.presto.plugin.jdbc.ReadMapping;
-import com.facebook.presto.plugin.jdbc.StandardReadMappings;
+import com.facebook.presto.plugin.jdbc.*;
 import com.facebook.presto.spi.ConnectorSession;
 import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.SchemaTableName;
 import com.facebook.presto.spi.StandardErrorCode;
+import org.apache.http.util.Asserts;
+import ru.yandex.clickhouse.ClickHouseDriver;
 
 import javax.inject.Inject;
 
-import java.sql.Connection;
-import java.sql.DatabaseMetaData;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Types;
+import java.sql.*;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Properties;
 
+import static com.facebook.presto.plugin.jdbc.DriverConnectionFactory.basicConnectionProperties;
 import static java.util.Objects.requireNonNull;
 
 public class ClickhouseClient
@@ -56,12 +44,23 @@ public class ClickhouseClient
     @Inject
     public ClickhouseClient(JdbcConnectorId connectorId,
                             BaseJdbcConfig config,
-                            ClickhouseConfig clickhouseConfig,
-                            ConnectionFactory connectionFactory)
-    {
-        super(connectorId, config, "", connectionFactory);
+                            ClickhouseConfig clickhouseConfig) throws SQLException {
+        super(connectorId, config, "", connectionFactory(config,clickhouseConfig));
         requireNonNull(clickhouseConfig, "clickhouse config is null");
         this.numberDefaultScale = clickhouseConfig.getNumberDefaultScale();
+    }
+
+    public static ConnectionFactory connectionFactory(BaseJdbcConfig config, ClickhouseConfig clickhouseConfig)
+            throws SQLException
+    {
+//        Properties connectionProperties = new Properties();
+                Properties connectionProperties = basicConnectionProperties(config);
+        Asserts.notEmpty(config.getConnectionUrl(), "connection-url");
+        return (ConnectionFactory) new DriverConnectionFactory((Driver) new ClickHouseDriver(),
+                config.getConnectionUrl(),
+                Optional.ofNullable(config.getUserCredentialName()),
+                Optional.ofNullable(config.getPasswordCredentialName()),
+                connectionProperties);
     }
 
     private String[] getTableTypes()

@@ -13,6 +13,8 @@
  */
 package com.facebook.presto.plugin.jdbc;
 
+import com.facebook.airlift.log.Logger;
+
 import java.sql.Connection;
 import java.sql.Driver;
 import java.sql.SQLException;
@@ -31,6 +33,7 @@ public class DriverConnectionFactory
     private final Properties connectionProperties;
     private final Optional<String> userCredentialName;
     private final Optional<String> passwordCredentialName;
+    private static final Logger log = Logger.get(DriverConnectionFactory.class);
 
     public DriverConnectionFactory(Driver driver, BaseJdbcConfig config)
     {
@@ -78,7 +81,10 @@ public class DriverConnectionFactory
         else {
             updatedConnectionProperties = connectionProperties;
         }
-
+        log.info("Connection properties: " + connectionProperties);
+        log.info("Connection url:" + connectionUrl);
+        log.info("Update connection properties: " + updatedConnectionProperties);
+        System.out.println("Connection properties: " + connectionProperties);
         Connection connection = driver.connect(connectionUrl, updatedConnectionProperties);
         checkState(connection != null, "Driver returned null connection");
         return connection;

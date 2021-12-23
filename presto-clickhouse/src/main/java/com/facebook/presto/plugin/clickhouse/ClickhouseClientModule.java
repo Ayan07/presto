@@ -32,6 +32,8 @@ import java.sql.SQLException;
 import java.util.Optional;
 import java.util.Properties;
 
+import static com.facebook.presto.plugin.jdbc.DriverConnectionFactory.basicConnectionProperties;
+
 public class ClickhouseClientModule
         implements Module
 {
@@ -43,17 +45,18 @@ public class ClickhouseClientModule
         binder.bind(HttpPost.class).toInstance(new HttpPost());  // to add httpclient
     }
 
-    @Provides
-    @Singleton
-    public static ConnectionFactory connectionFactory(BaseJdbcConfig config, ClickhouseConfig clickhouseConfig)
-            throws SQLException
-    {
-        Properties connectionProperties = new Properties();
-        Asserts.notEmpty(config.getConnectionUrl(), "connection-url");
-        return (ConnectionFactory) new DriverConnectionFactory((Driver) new ClickHouseDriver(),
-                config.getConnectionUrl(),
-                Optional.ofNullable(config.getUserCredentialName()),
-                Optional.ofNullable(config.getPasswordCredentialName()),
-                connectionProperties);
-    }
+//    @Provides
+//    @Singleton
+//    public static ConnectionFactory connectionFactory(BaseJdbcConfig config, ClickhouseConfig clickhouseConfig)
+//            throws SQLException
+//    {
+//        Properties connectionProperties = new Properties();
+////        Properties connectionProperties = basicConnectionProperties(config);
+//        Asserts.notEmpty(config.getConnectionUrl(), "connection-url");
+//        return (ConnectionFactory) new DriverConnectionFactory((Driver) new ClickHouseDriver(),
+//                config.getConnectionUrl(),
+//                Optional.ofNullable(config.getUserCredentialName()),
+//                Optional.ofNullable(config.getPasswordCredentialName()),
+//                connectionProperties);
+//    }
 }
