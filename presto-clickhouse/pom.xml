@@ -16,6 +16,7 @@
 
     <properties>
         <air.main.basedir>${project.parent.basedir}</air.main.basedir>
+        <commons.codec>1.10</commons.codec>
     </properties>
 
     <dependencies>
@@ -43,6 +44,13 @@
             <groupId>org.apache.httpcomponents</groupId>
             <artifactId>httpcore</artifactId>
             <version>4.4.13</version>
+        </dependency>
+
+        <dependency>
+            <groupId>commons-codec</groupId>
+            <artifactId>commons-codec</artifactId>
+            <version>1.10</version>
+            <scope>runtime</scope>
         </dependency>
 
         <dependency>

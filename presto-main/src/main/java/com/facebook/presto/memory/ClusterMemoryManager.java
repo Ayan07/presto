@@ -260,12 +260,17 @@ public class ClusterMemoryManager
 
             if (!resourceOvercommit) {
                 long userMemoryLimit = min(maxQueryMemory.toBytes(), getQueryMaxMemory(query.getSession()).toBytes());
+//                log.info("Max Query Memory" + maxQueryMemory.toBytes());
+//                log.info("Query_max_memory" + getQueryMaxMemory(query.getSession()).toBytes());
+//                log.info("User memory Reservation" + userMemoryReservation);
+//                log.info("User memory Limit" + userMemoryLimit);
                 if (userMemoryReservation > userMemoryLimit) {
                     query.fail(exceededGlobalUserLimit(succinctBytes(userMemoryLimit)));
                     queryKilled = true;
                 }
 
                 long totalMemoryLimit = min(maxQueryTotalMemory.toBytes(), getQueryMaxTotalMemory(query.getSession()).toBytes());
+
                 if (totalMemoryReservation > totalMemoryLimit) {
                     query.fail(exceededGlobalTotalLimit(succinctBytes(totalMemoryLimit)));
                     queryKilled = true;
