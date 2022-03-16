@@ -26,16 +26,19 @@ public class FileBasedSystemAccessControlRules
     private final List<CatalogAccessControlRule> catalogRules;
     private final Optional<List<PrincipalUserMatchRule>> principalUserMatchRules;
     private final Optional<List<SchemaAccessControlRule>> schemaRules;
+    private final Optional<List<QueryAccessRule>> queryAccessRules;
 
     @JsonCreator
     public FileBasedSystemAccessControlRules(
             @JsonProperty("catalogs") Optional<List<CatalogAccessControlRule>> catalogRules,
             @JsonProperty("principals") Optional<List<PrincipalUserMatchRule>> principalUserMatchRules,
-            @JsonProperty("schemas") Optional<List<SchemaAccessControlRule>> schemaRules)
+            @JsonProperty("schemas") Optional<List<SchemaAccessControlRule>> schemaRules,
+            @JsonProperty("queries") Optional<List<QueryAccessRule>> queryAccessRules)
     {
         this.catalogRules = catalogRules.map(ImmutableList::copyOf).orElse(ImmutableList.of());
         this.principalUserMatchRules = principalUserMatchRules.map(ImmutableList::copyOf);
         this.schemaRules = schemaRules.map(ImmutableList::copyOf);
+        this.queryAccessRules = queryAccessRules.map(ImmutableList::copyOf);
     }
 
     public List<CatalogAccessControlRule> getCatalogRules()
@@ -51,5 +54,10 @@ public class FileBasedSystemAccessControlRules
     public Optional<List<SchemaAccessControlRule>> getSchemaRules()
     {
         return schemaRules;
+    }
+
+    public Optional<List<QueryAccessRule>> getQueryAccessRules()
+    {
+        return queryAccessRules;
     }
 }

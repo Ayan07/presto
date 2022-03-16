@@ -56,6 +56,16 @@ public class AccessDeniedException
         throw new AccessDeniedException(format("Cannot access catalog %s%s", catalogName, formatExtraInfo(extraInfo)));
     }
 
+    public static void denyViewQuery()
+    {
+        denyViewQuery(null);
+    }
+
+    public static void denyViewQuery(String extraInfo)
+    {
+        throw new AccessDeniedException(format("Cannot view query%s", formatExtraInfo(extraInfo)));
+    }
+
     public static void denyCreateSchema(String schemaName)
     {
         denyCreateSchema(schemaName, null);

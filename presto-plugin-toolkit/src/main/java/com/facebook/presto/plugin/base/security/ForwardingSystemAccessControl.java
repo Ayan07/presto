@@ -54,6 +54,30 @@ public abstract class ForwardingSystemAccessControl
     }
 
     @Override
+    public void checkCanExecuteQuery(Identity identity, AccessControlContext context)
+    {
+        delegate().checkCanExecuteQuery(identity, context);
+    }
+
+    @Override
+    public void checkCanViewQueryOwnedBy(Identity identity, AccessControlContext context, String queryOwner)
+    {
+        delegate().checkCanViewQueryOwnedBy(identity, context, queryOwner);
+    }
+
+    @Override
+    public Set<String> filterViewQueryOwnedBy(Identity identity, Set<String> queryOwners)
+    {
+        return delegate().filterViewQueryOwnedBy(identity, queryOwners);
+    }
+
+    @Override
+    public void checkCanKillQueryOwnedBy(Identity identity, String queryOwner)
+    {
+        delegate().checkCanKillQueryOwnedBy(identity, queryOwner);
+    }
+
+    @Override
     public void checkQueryIntegrity(Identity identity, AccessControlContext context, String query)
     {
         delegate().checkQueryIntegrity(identity, context, query);
@@ -90,7 +114,8 @@ public abstract class ForwardingSystemAccessControl
     }
 
     @Override
-    public void checkCanRenameSchema(Identity identity, AccessControlContext context, CatalogSchemaName schema, String newSchemaName)
+    public void checkCanRenameSchema(Identity identity, AccessControlContext context, CatalogSchemaName schema,
+            String newSchemaName)
     {
         delegate().checkCanRenameSchema(identity, context, schema, newSchemaName);
     }
@@ -102,7 +127,8 @@ public abstract class ForwardingSystemAccessControl
     }
 
     @Override
-    public Set<String> filterSchemas(Identity identity, AccessControlContext context, String catalogName, Set<String> schemaNames)
+    public Set<String> filterSchemas(Identity identity, AccessControlContext context, String catalogName,
+            Set<String> schemaNames)
     {
         return delegate().filterSchemas(identity, context, catalogName, schemaNames);
     }
@@ -120,7 +146,8 @@ public abstract class ForwardingSystemAccessControl
     }
 
     @Override
-    public void checkCanRenameTable(Identity identity, AccessControlContext context, CatalogSchemaTableName table, CatalogSchemaTableName newTable)
+    public void checkCanRenameTable(Identity identity, AccessControlContext context, CatalogSchemaTableName table,
+            CatalogSchemaTableName newTable)
     {
         delegate().checkCanRenameTable(identity, context, table, newTable);
     }
@@ -132,7 +159,8 @@ public abstract class ForwardingSystemAccessControl
     }
 
     @Override
-    public Set<SchemaTableName> filterTables(Identity identity, AccessControlContext context, String catalogName, Set<SchemaTableName> tableNames)
+    public Set<SchemaTableName> filterTables(Identity identity, AccessControlContext context, String catalogName,
+            Set<SchemaTableName> tableNames)
     {
         return delegate().filterTables(identity, context, catalogName, tableNames);
     }
@@ -156,7 +184,8 @@ public abstract class ForwardingSystemAccessControl
     }
 
     @Override
-    public void checkCanSelectFromColumns(Identity identity, AccessControlContext context, CatalogSchemaTableName table, Set<String> columns)
+    public void checkCanSelectFromColumns(Identity identity, AccessControlContext context, CatalogSchemaTableName table,
+            Set<String> columns)
     {
         delegate().checkCanSelectFromColumns(identity, context, table, columns);
     }
@@ -186,25 +215,29 @@ public abstract class ForwardingSystemAccessControl
     }
 
     @Override
-    public void checkCanCreateViewWithSelectFromColumns(Identity identity, AccessControlContext context, CatalogSchemaTableName table, Set<String> columns)
+    public void checkCanCreateViewWithSelectFromColumns(Identity identity, AccessControlContext context,
+            CatalogSchemaTableName table, Set<String> columns)
     {
         delegate().checkCanCreateViewWithSelectFromColumns(identity, context, table, columns);
     }
 
     @Override
-    public void checkCanSetCatalogSessionProperty(Identity identity, AccessControlContext context, String catalogName, String propertyName)
+    public void checkCanSetCatalogSessionProperty(Identity identity, AccessControlContext context, String catalogName,
+            String propertyName)
     {
         delegate().checkCanSetCatalogSessionProperty(identity, context, catalogName, propertyName);
     }
 
     @Override
-    public void checkCanGrantTablePrivilege(Identity identity, AccessControlContext context, Privilege privilege, CatalogSchemaTableName table, PrestoPrincipal grantee, boolean withGrantOption)
+    public void checkCanGrantTablePrivilege(Identity identity, AccessControlContext context, Privilege privilege,
+            CatalogSchemaTableName table, PrestoPrincipal grantee, boolean withGrantOption)
     {
         delegate().checkCanGrantTablePrivilege(identity, context, privilege, table, grantee, withGrantOption);
     }
 
     @Override
-    public void checkCanRevokeTablePrivilege(Identity identity, AccessControlContext context, Privilege privilege, CatalogSchemaTableName table, PrestoPrincipal revokee, boolean grantOptionFor)
+    public void checkCanRevokeTablePrivilege(Identity identity, AccessControlContext context, Privilege privilege,
+            CatalogSchemaTableName table, PrestoPrincipal revokee, boolean grantOptionFor)
     {
         delegate().checkCanRevokeTablePrivilege(identity, context, privilege, table, revokee, grantOptionFor);
     }

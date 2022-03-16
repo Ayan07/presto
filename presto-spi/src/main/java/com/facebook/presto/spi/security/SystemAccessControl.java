@@ -53,6 +53,17 @@ public interface SystemAccessControl
      */
     void checkCanSetUser(AccessControlContext context, Optional<Principal> principal, String userName);
 
+    void checkCanExecuteQuery(Identity identity, AccessControlContext context);
+
+    void checkCanViewQueryOwnedBy(Identity identity, AccessControlContext context, String queryOwner);
+
+    default Set<String> filterViewQueryOwnedBy(Identity identity, Set<String> queryOwners)
+    {
+        return Collections.emptySet();
+    }
+
+    void checkCanKillQueryOwnedBy(Identity identity, String queryOwner);
+
     /**
      * Check if the query is unexpectedly modified using the credentials passed in the identity.
      *

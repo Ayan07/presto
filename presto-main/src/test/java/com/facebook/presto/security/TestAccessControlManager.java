@@ -316,6 +316,27 @@ public class TestAccessControlManager
                 }
 
                 @Override
+                public void checkCanExecuteQuery(Identity identity, AccessControlContext context)
+                {
+                }
+
+                @Override
+                public void checkCanViewQueryOwnedBy(Identity identity, AccessControlContext context, String queryOwner)
+                {
+                }
+
+                @Override
+                public Set<String> filterViewQueryOwnedBy(Identity identity, Set<String> queryOwners)
+                {
+                    return queryOwners;
+                }
+
+                @Override
+                public void checkCanKillQueryOwnedBy(Identity identity, String queryOwner)
+                {
+                }
+
+                @Override
                 public void checkQueryIntegrity(Identity identity, AccessControlContext context, String query)
                 {
                     if (!query.equals(identity.getExtraCredentials().get(QUERY_TOKEN_FIELD))) {

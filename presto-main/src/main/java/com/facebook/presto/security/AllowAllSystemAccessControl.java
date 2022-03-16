@@ -67,6 +67,27 @@ public class AllowAllSystemAccessControl
     }
 
     @Override
+    public void checkCanExecuteQuery(Identity identity, AccessControlContext context)
+    {
+    }
+
+    @Override
+    public void checkCanViewQueryOwnedBy(Identity identity, AccessControlContext context, String queryOwner)
+    {
+    }
+
+    @Override
+    public Set<String> filterViewQueryOwnedBy(Identity identity, Set<String> queryOwners)
+    {
+        return queryOwners;
+    }
+
+    @Override
+    public void checkCanKillQueryOwnedBy(Identity identity, String queryOwner)
+    {
+    }
+
+    @Override
     public void checkCanSetSystemSessionProperty(Identity identity, AccessControlContext context, String propertyName)
     {
     }
@@ -93,7 +114,8 @@ public class AllowAllSystemAccessControl
     }
 
     @Override
-    public void checkCanRenameSchema(Identity identity, AccessControlContext context, CatalogSchemaName schema, String newSchemaName)
+    public void checkCanRenameSchema(Identity identity, AccessControlContext context, CatalogSchemaName schema,
+            String newSchemaName)
     {
     }
 
@@ -103,7 +125,8 @@ public class AllowAllSystemAccessControl
     }
 
     @Override
-    public Set<String> filterSchemas(Identity identity, AccessControlContext context, String catalogName, Set<String> schemaNames)
+    public Set<String> filterSchemas(Identity identity, AccessControlContext context, String catalogName,
+            Set<String> schemaNames)
     {
         return schemaNames;
     }
@@ -119,7 +142,8 @@ public class AllowAllSystemAccessControl
     }
 
     @Override
-    public void checkCanRenameTable(Identity identity, AccessControlContext context, CatalogSchemaTableName table, CatalogSchemaTableName newTable)
+    public void checkCanRenameTable(Identity identity, AccessControlContext context, CatalogSchemaTableName table,
+            CatalogSchemaTableName newTable)
     {
     }
 
@@ -129,7 +153,8 @@ public class AllowAllSystemAccessControl
     }
 
     @Override
-    public Set<SchemaTableName> filterTables(Identity identity, AccessControlContext context, String catalogName, Set<SchemaTableName> tableNames)
+    public Set<SchemaTableName> filterTables(Identity identity, AccessControlContext context, String catalogName,
+            Set<SchemaTableName> tableNames)
     {
         return tableNames;
     }
@@ -150,7 +175,8 @@ public class AllowAllSystemAccessControl
     }
 
     @Override
-    public void checkCanSelectFromColumns(Identity identity, AccessControlContext context, CatalogSchemaTableName table, Set<String> columns)
+    public void checkCanSelectFromColumns(Identity identity, AccessControlContext context, CatalogSchemaTableName table,
+            Set<String> columns)
     {
     }
 
@@ -175,22 +201,26 @@ public class AllowAllSystemAccessControl
     }
 
     @Override
-    public void checkCanCreateViewWithSelectFromColumns(Identity identity, AccessControlContext context, CatalogSchemaTableName table, Set<String> columns)
+    public void checkCanCreateViewWithSelectFromColumns(Identity identity, AccessControlContext context,
+            CatalogSchemaTableName table, Set<String> columns)
     {
     }
 
     @Override
-    public void checkCanSetCatalogSessionProperty(Identity identity, AccessControlContext context, String catalogName, String propertyName)
+    public void checkCanSetCatalogSessionProperty(Identity identity, AccessControlContext context, String catalogName,
+            String propertyName)
     {
     }
 
     @Override
-    public void checkCanGrantTablePrivilege(Identity identity, AccessControlContext context, Privilege privilege, CatalogSchemaTableName table, PrestoPrincipal grantee, boolean withGrantOption)
+    public void checkCanGrantTablePrivilege(Identity identity, AccessControlContext context, Privilege privilege,
+            CatalogSchemaTableName table, PrestoPrincipal grantee, boolean withGrantOption)
     {
     }
 
     @Override
-    public void checkCanRevokeTablePrivilege(Identity identity, AccessControlContext context, Privilege privilege, CatalogSchemaTableName table, PrestoPrincipal revokee, boolean grantOptionFor)
+    public void checkCanRevokeTablePrivilege(Identity identity, AccessControlContext context, Privilege privilege,
+            CatalogSchemaTableName table, PrestoPrincipal revokee, boolean grantOptionFor)
     {
     }
 }

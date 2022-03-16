@@ -35,8 +35,17 @@ public interface AccessControl
      */
     void checkCanSetUser(AccessControlContext accessControlContext, Optional<Principal> principal, String userName);
 
+    void checkCanExecuteQuery(Identity identity, AccessControlContext context);
+
+    void checkCanViewQueryOwnedBy(Identity identity, AccessControlContext context, String queryOwner);
+
+    Set<String> filterViewQueryOwnedBy(Identity identity, Set<String> queryOwners);
+
+    void checkCanKillQueryOwnedBy(AccessControlContext context, Identity identity, String queryOwner);
+
     /**
      * Check if the query is unexpectedly modified using the credentials passed in the identity.
+     *
      * @throws com.facebook.presto.spi.security.AccessDeniedException if query is modified.
      */
     void checkQueryIntegrity(Identity identity, AccessControlContext context, String query);
@@ -56,21 +65,24 @@ public interface AccessControl
      *
      * @throws com.facebook.presto.spi.security.AccessDeniedException if not allowed
      */
-    void checkCanCreateSchema(TransactionId transactionId, Identity identity, AccessControlContext context, CatalogSchemaName schemaName);
+    void checkCanCreateSchema(TransactionId transactionId, Identity identity, AccessControlContext context,
+            CatalogSchemaName schemaName);
 
     /**
      * Check if identity is allowed to drop the specified schema.
      *
      * @throws com.facebook.presto.spi.security.AccessDeniedException if not allowed
      */
-    void checkCanDropSchema(TransactionId transactionId, Identity identity, AccessControlContext context, CatalogSchemaName schemaName);
+    void checkCanDropSchema(TransactionId transactionId, Identity identity, AccessControlContext context,
+            CatalogSchemaName schemaName);
 
     /**
      * Check if identity is allowed to rename the specified schema.
      *
      * @throws com.facebook.presto.spi.security.AccessDeniedException if not allowed
      */
-    void checkCanRenameSchema(TransactionId transactionId, Identity identity, AccessControlContext context, CatalogSchemaName schemaName, String newSchemaName);
+    void checkCanRenameSchema(TransactionId transactionId, Identity identity, AccessControlContext context,
+            CatalogSchemaName schemaName, String newSchemaName);
 
     /**
      * Check if identity is allowed to execute SHOW SCHEMAS in a catalog.
@@ -81,33 +93,38 @@ public interface AccessControl
      *
      * @throws com.facebook.presto.spi.security.AccessDeniedException if not allowed
      */
-    void checkCanShowSchemas(TransactionId transactionId, Identity identity, AccessControlContext context, String catalogName);
+    void checkCanShowSchemas(TransactionId transactionId, Identity identity, AccessControlContext context,
+            String catalogName);
 
     /**
      * Filter the list of schemas in a catalog to those visible to the identity.
      */
-    Set<String> filterSchemas(TransactionId transactionId, Identity identity, AccessControlContext context, String catalogName, Set<String> schemaNames);
+    Set<String> filterSchemas(TransactionId transactionId, Identity identity, AccessControlContext context,
+            String catalogName, Set<String> schemaNames);
 
     /**
      * Check if identity is allowed to create the specified table.
      *
      * @throws com.facebook.presto.spi.security.AccessDeniedException if not allowed
      */
-    void checkCanCreateTable(TransactionId transactionId, Identity identity, AccessControlContext context, QualifiedObjectName tableName);
+    void checkCanCreateTable(TransactionId transactionId, Identity identity, AccessControlContext context,
+            QualifiedObjectName tableName);
 
     /**
      * Check if identity is allowed to drop the specified table.
      *
      * @throws com.facebook.presto.spi.security.AccessDeniedException if not allowed
      */
-    void checkCanDropTable(TransactionId transactionId, Identity identity, AccessControlContext context, QualifiedObjectName tableName);
+    void checkCanDropTable(TransactionId transactionId, Identity identity, AccessControlContext context,
+            QualifiedObjectName tableName);
 
     /**
      * Check if identity is allowed to rename the specified table.
      *
      * @throws com.facebook.presto.spi.security.AccessDeniedException if not allowed
      */
-    void checkCanRenameTable(TransactionId transactionId, Identity identity, AccessControlContext context, QualifiedObjectName tableName, QualifiedObjectName newTableName);
+    void checkCanRenameTable(TransactionId transactionId, Identity identity, AccessControlContext context,
+            QualifiedObjectName tableName, QualifiedObjectName newTableName);
 
     /**
      * Check if identity is allowed to show metadata of tables by executing SHOW TABLES, SHOW GRANTS etc. in a catalog.
@@ -118,82 +135,94 @@ public interface AccessControl
      *
      * @throws com.facebook.presto.spi.security.AccessDeniedException if not allowed
      */
-    void checkCanShowTablesMetadata(TransactionId transactionId, Identity identity, AccessControlContext context, CatalogSchemaName schema);
+    void checkCanShowTablesMetadata(TransactionId transactionId, Identity identity, AccessControlContext context,
+            CatalogSchemaName schema);
 
     /**
      * Filter the list of tables and views to those visible to the identity.
      */
-    Set<SchemaTableName> filterTables(TransactionId transactionId, Identity identity, AccessControlContext context, String catalogName, Set<SchemaTableName> tableNames);
+    Set<SchemaTableName> filterTables(TransactionId transactionId, Identity identity, AccessControlContext context,
+            String catalogName, Set<SchemaTableName> tableNames);
 
     /**
      * Check if identity is allowed to add columns to the specified table.
      *
      * @throws com.facebook.presto.spi.security.AccessDeniedException if not allowed
      */
-    void checkCanAddColumns(TransactionId transactionId, Identity identity, AccessControlContext context, QualifiedObjectName tableName);
+    void checkCanAddColumns(TransactionId transactionId, Identity identity, AccessControlContext context,
+            QualifiedObjectName tableName);
 
     /**
      * Check if identity is allowed to drop columns from the specified table.
      *
      * @throws com.facebook.presto.spi.security.AccessDeniedException if not allowed
      */
-    void checkCanDropColumn(TransactionId transactionId, Identity identity, AccessControlContext context, QualifiedObjectName tableName);
+    void checkCanDropColumn(TransactionId transactionId, Identity identity, AccessControlContext context,
+            QualifiedObjectName tableName);
 
     /**
      * Check if identity is allowed to rename a column in the specified table.
      *
      * @throws com.facebook.presto.spi.security.AccessDeniedException if not allowed
      */
-    void checkCanRenameColumn(TransactionId transactionId, Identity identity, AccessControlContext context, QualifiedObjectName tableName);
+    void checkCanRenameColumn(TransactionId transactionId, Identity identity, AccessControlContext context,
+            QualifiedObjectName tableName);
 
     /**
      * Check if identity is allowed to insert into the specified table.
      *
      * @throws com.facebook.presto.spi.security.AccessDeniedException if not allowed
      */
-    void checkCanInsertIntoTable(TransactionId transactionId, Identity identity, AccessControlContext context, QualifiedObjectName tableName);
+    void checkCanInsertIntoTable(TransactionId transactionId, Identity identity, AccessControlContext context,
+            QualifiedObjectName tableName);
 
     /**
      * Check if identity is allowed to delete from the specified table.
      *
      * @throws com.facebook.presto.spi.security.AccessDeniedException if not allowed
      */
-    void checkCanDeleteFromTable(TransactionId transactionId, Identity identity, AccessControlContext context, QualifiedObjectName tableName);
+    void checkCanDeleteFromTable(TransactionId transactionId, Identity identity, AccessControlContext context,
+            QualifiedObjectName tableName);
 
     /**
      * Check if identity is allowed to create the specified view.
      *
      * @throws com.facebook.presto.spi.security.AccessDeniedException if not allowed
      */
-    void checkCanCreateView(TransactionId transactionId, Identity identity, AccessControlContext context, QualifiedObjectName viewName);
+    void checkCanCreateView(TransactionId transactionId, Identity identity, AccessControlContext context,
+            QualifiedObjectName viewName);
 
     /**
      * Check if identity is allowed to drop the specified view.
      *
      * @throws com.facebook.presto.spi.security.AccessDeniedException if not allowed
      */
-    void checkCanDropView(TransactionId transactionId, Identity identity, AccessControlContext context, QualifiedObjectName viewName);
+    void checkCanDropView(TransactionId transactionId, Identity identity, AccessControlContext context,
+            QualifiedObjectName viewName);
 
     /**
      * Check if identity is allowed to create a view that selects from the specified columns.
      *
      * @throws com.facebook.presto.spi.security.AccessDeniedException if not allowed
      */
-    void checkCanCreateViewWithSelectFromColumns(TransactionId transactionId, Identity identity, AccessControlContext context, QualifiedObjectName tableName, Set<String> columnNames);
+    void checkCanCreateViewWithSelectFromColumns(TransactionId transactionId, Identity identity,
+            AccessControlContext context, QualifiedObjectName tableName, Set<String> columnNames);
 
     /**
      * Check if identity is allowed to grant a privilege to the grantee on the specified table.
      *
      * @throws com.facebook.presto.spi.security.AccessDeniedException if not allowed
      */
-    void checkCanGrantTablePrivilege(TransactionId transactionId, Identity identity, AccessControlContext context, Privilege privilege, QualifiedObjectName tableName, PrestoPrincipal grantee, boolean withGrantOption);
+    void checkCanGrantTablePrivilege(TransactionId transactionId, Identity identity, AccessControlContext context,
+            Privilege privilege, QualifiedObjectName tableName, PrestoPrincipal grantee, boolean withGrantOption);
 
     /**
      * Check if identity is allowed to revoke a privilege from the revokee on the specified table.
      *
      * @throws com.facebook.presto.spi.security.AccessDeniedException if not allowed
      */
-    void checkCanRevokeTablePrivilege(TransactionId transactionId, Identity identity, AccessControlContext context, Privilege privilege, QualifiedObjectName tableName, PrestoPrincipal revokee, boolean grantOptionFor);
+    void checkCanRevokeTablePrivilege(TransactionId transactionId, Identity identity, AccessControlContext context,
+            Privilege privilege, QualifiedObjectName tableName, PrestoPrincipal revokee, boolean grantOptionFor);
 
     /**
      * Check if identity is allowed to set the specified system property.
@@ -207,65 +236,80 @@ public interface AccessControl
      *
      * @throws com.facebook.presto.spi.security.AccessDeniedException if not allowed
      */
-    void checkCanSetCatalogSessionProperty(TransactionId transactionId, Identity identity, AccessControlContext context, String catalogName, String propertyName);
+    void checkCanSetCatalogSessionProperty(TransactionId transactionId, Identity identity, AccessControlContext context,
+            String catalogName, String propertyName);
 
     /**
      * Check if identity is allowed to select from the specified columns.  The column set can be empty.
      *
      * @throws com.facebook.presto.spi.security.AccessDeniedException if not allowed
      */
-    void checkCanSelectFromColumns(TransactionId transactionId, Identity identity, AccessControlContext context, QualifiedObjectName tableName, Set<String> columnNames);
+    void checkCanSelectFromColumns(TransactionId transactionId, Identity identity, AccessControlContext context,
+            QualifiedObjectName tableName, Set<String> columnNames);
 
     /**
      * Check if identity is allowed to create the specified role.
      *
      * @throws com.facebook.presto.spi.security.AccessDeniedException if not allowed
      */
-    void checkCanCreateRole(TransactionId transactionId, Identity identity, AccessControlContext context, String role, Optional<PrestoPrincipal> grantor, String catalogName);
+    void checkCanCreateRole(TransactionId transactionId, Identity identity, AccessControlContext context, String role,
+            Optional<PrestoPrincipal> grantor, String catalogName);
 
     /**
      * Check if identity is allowed to drop the specified role.
      *
      * @throws com.facebook.presto.spi.security.AccessDeniedException if not allowed
      */
-    void checkCanDropRole(TransactionId transactionId, Identity identity, AccessControlContext context, String role, String catalogName);
+    void checkCanDropRole(TransactionId transactionId, Identity identity, AccessControlContext context, String role,
+            String catalogName);
 
     /**
      * Check if identity is allowed to grant the specified roles to the specified principals.
      *
      * @throws com.facebook.presto.spi.security.AccessDeniedException if not allowed
      */
-    void checkCanGrantRoles(TransactionId transactionId, Identity identity, AccessControlContext context, Set<String> roles, Set<PrestoPrincipal> grantees, boolean withAdminOption, Optional<PrestoPrincipal> grantor, String catalogName);
+    void checkCanGrantRoles(TransactionId transactionId, Identity identity, AccessControlContext context,
+            Set<String> roles, Set<PrestoPrincipal> grantees, boolean withAdminOption,
+            Optional<PrestoPrincipal> grantor, String catalogName);
 
     /**
      * Check if identity is allowed to revoke the specified roles from the specified principals.
      *
      * @throws com.facebook.presto.spi.security.AccessDeniedException if not allowed
      */
-    void checkCanRevokeRoles(TransactionId transactionId, Identity identity, AccessControlContext context, Set<String> roles, Set<PrestoPrincipal> grantees, boolean adminOptionFor, Optional<PrestoPrincipal> grantor, String catalogName);
+    void checkCanRevokeRoles(TransactionId transactionId, Identity identity, AccessControlContext context,
+            Set<String> roles, Set<PrestoPrincipal> grantees, boolean adminOptionFor, Optional<PrestoPrincipal> grantor,
+            String catalogName);
 
     /**
      * Check if identity is allowed to set role for specified catalog.
      *
      * @throws com.facebook.presto.spi.security.AccessDeniedException if not allowed
      */
-    void checkCanSetRole(TransactionId requiredTransactionId, Identity identity, AccessControlContext context, String role, String catalog);
+    void checkCanSetRole(TransactionId requiredTransactionId, Identity identity, AccessControlContext context,
+            String role, String catalog);
 
     /**
      * Check if identity is allowed to show roles on the specified catalog.
+     *
      * @throws com.facebook.presto.spi.security.AccessDeniedException if not allowed
      */
-    void checkCanShowRoles(TransactionId transactionId, Identity identity, AccessControlContext context, String catalogName);
+    void checkCanShowRoles(TransactionId transactionId, Identity identity, AccessControlContext context,
+            String catalogName);
 
     /**
      * Check if identity is allowed to show current roles on the specified catalog.
+     *
      * @throws com.facebook.presto.spi.security.AccessDeniedException if not allowed
      */
-    void checkCanShowCurrentRoles(TransactionId transactionId, Identity identity, AccessControlContext context, String catalogName);
+    void checkCanShowCurrentRoles(TransactionId transactionId, Identity identity, AccessControlContext context,
+            String catalogName);
 
     /**
      * Check if identity is allowed to show its own role grants on the specified catalog.
+     *
      * @throws com.facebook.presto.spi.security.AccessDeniedException if not allowed
      */
-    void checkCanShowRoleGrants(TransactionId transactionId, Identity identity, AccessControlContext context, String catalogName);
+    void checkCanShowRoleGrants(TransactionId transactionId, Identity identity, AccessControlContext context,
+            String catalogName);
 }
