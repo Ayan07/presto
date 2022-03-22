@@ -13,9 +13,11 @@
  */
 package com.facebook.presto.hive.parquet;
 
+import com.facebook.airlift.log.Logger;
 import com.facebook.presto.hive.FileFormatDataSourceStats;
 import com.facebook.presto.parquet.AbstractParquetDataSource;
 import com.facebook.presto.parquet.ParquetDataSourceId;
+import com.facebook.presto.parquet.retry.BackOffService;
 import com.facebook.presto.spi.PrestoException;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -42,6 +44,7 @@ public class HdfsParquetDataSource
 {
     private final FSDataInputStream inputStream;
     private final FileFormatDataSourceStats stats;
+    private static final Logger LOGGER = Logger.get(HdfsParquetDataSource.class);
 
     public HdfsParquetDataSource(ParquetDataSourceId id, FSDataInputStream inputStream, FileFormatDataSourceStats stats)
     {
@@ -60,6 +63,8 @@ public class HdfsParquetDataSource
     @Override
     protected void readInternal(long position, byte[] buffer, int bufferOffset, int bufferLength)
     {
+        BackOffService backoff = new BackOffService(3, 1000L);
+        boolean flag = false;
         try {
             long start = System.nanoTime();
             inputStream.readFully(position, buffer, bufferOffset, bufferLength);
@@ -67,7 +72,28 @@ public class HdfsParquetDataSource
         }
         catch (PrestoException e) {
             // just in case there is a Presto wrapper or hook
+            LOGGER.debug("Got PrestoException while reading data" + e.toString());
             throw e;
+        }
+        catch (IOException e) {
+            LOGGER.debug("Received IO Exception, exponential backoff");
+            while (backoff.shouldRetry()) {
+                LOGGER.debug("Retrying with retry count :" + backoff.getNumberOfTriesLeft() + "for path " + getId() + "and position " + position );
+                try {
+                    long start = System.nanoTime();
+                    inputStream.readFully(position, buffer, bufferOffset, bufferLength);
+                    stats.readDataBytesPerSecond(bufferLength, System.nanoTime() - start);
+                    flag = true;
+                    break;
+                }
+                catch (IOException ioException) {
+                    LOGGER.debug("Caught IO exception when retrying");
+                    backoff.errorOccurred(ioException);
+                }
+            }
+            if (!flag) {
+                throw new PrestoException(HIVE_FILESYSTEM_ERROR, "Getting IO exception and retry failed", e);
+            }
         }
         catch (Exception e) {
             throw new PrestoException(HIVE_FILESYSTEM_ERROR, format("Error reading from %s at position %s", getId(), position), e);
