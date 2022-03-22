@@ -16,6 +16,7 @@ package com.facebook.presto.hive.parquet;
 import com.facebook.presto.hive.FileFormatDataSourceStats;
 import com.facebook.presto.parquet.AbstractParquetDataSource;
 import com.facebook.presto.parquet.ParquetDataSourceId;
+import com.facebook.presto.parquet.retry.BackOffService;
 import com.facebook.presto.spi.PrestoException;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -53,6 +54,7 @@ public class HdfsParquetDataSource
     @Override
     protected void readInternal(long position, byte[] buffer, int bufferOffset, int bufferLength)
     {
+        BackOffService backoff = new BackOffService(3, 1000L);
         try {
             long start = System.nanoTime();
             inputStream.readFully(position, buffer, bufferOffset, bufferLength);
@@ -61,6 +63,19 @@ public class HdfsParquetDataSource
         catch (PrestoException e) {
             // just in case there is a Presto wrapper or hook
             throw e;
+        }
+        catch (IOException e) {
+            while (backoff.shouldRetry()) {
+                try {
+                    long start = System.nanoTime();
+                    inputStream.readFully(position, buffer, bufferOffset, bufferLength);
+                    stats.readDataBytesPerSecond(bufferLength, System.nanoTime() - start);
+                }
+                catch (IOException ioException) {
+                    backoff.errorOccurred(ioException);
+                }
+            }
+            throw new PrestoException(HIVE_FILESYSTEM_ERROR, "Getting IO exception and retry failed", e);
         }
         catch (Exception e) {
             throw new PrestoException(HIVE_FILESYSTEM_ERROR, format("Error reading from %s at position %s", getId(), position), e);
