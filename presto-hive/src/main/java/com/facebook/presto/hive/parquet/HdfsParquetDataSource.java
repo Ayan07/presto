@@ -24,6 +24,7 @@ import org.apache.hadoop.fs.Path;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.logging.Logger;
 
 import static com.facebook.presto.hive.HiveErrorCode.HIVE_CANNOT_OPEN_SPLIT;
 import static com.facebook.presto.hive.HiveErrorCode.HIVE_FILESYSTEM_ERROR;
@@ -36,6 +37,7 @@ public class HdfsParquetDataSource
 {
     private final FSDataInputStream inputStream;
     private final FileFormatDataSourceStats stats;
+    private static final Logger LOGGER = Logger.getLogger(HdfsParquetDataSource.class.getName());
 
     public HdfsParquetDataSource(ParquetDataSourceId id, FSDataInputStream inputStream, FileFormatDataSourceStats stats)
     {
@@ -65,6 +67,7 @@ public class HdfsParquetDataSource
             throw e;
         }
         catch (IOException e) {
+            LOGGER.warning("Received IO Exception,retrying with exponential backoff");
             while (backoff.shouldRetry()) {
                 try {
                     long start = System.nanoTime();
