@@ -13,8 +13,9 @@
  */
 package com.facebook.presto.parquet.retry;
 
+import com.facebook.airlift.log.Logger;
+
 import java.util.Random;
-import java.util.logging.Logger;
 
 public class BackOffService
 {
@@ -38,7 +39,7 @@ public class BackOffService
 
     private final Random random = new Random();
 
-    private static final Logger LOGGER = Logger.getLogger(BackOffService.class.getName());
+    private static final Logger LOGGER = Logger.get(BackOffService.class);
 
     public boolean shouldRetry()
     {
@@ -51,7 +52,7 @@ public class BackOffService
         if (!shouldRetry()) {
             LOGGER.info("**RETRY FAILED**");
         }
-        LOGGER.warning(e.toString());
+        LOGGER.warn(e.toString());
         LOGGER.info("Waiting before next retry");
         waitUntilNextTry();
         timeToWait += random.nextInt(1000);

@@ -13,6 +13,7 @@
  */
 package com.facebook.presto.hive.parquet;
 
+import com.facebook.airlift.log.Logger;
 import com.facebook.presto.hive.FileFormatDataSourceStats;
 import com.facebook.presto.parquet.AbstractParquetDataSource;
 import com.facebook.presto.parquet.ParquetDataSourceId;
@@ -24,7 +25,6 @@ import org.apache.hadoop.fs.Path;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.logging.Logger;
 
 import static com.facebook.presto.hive.HiveErrorCode.HIVE_CANNOT_OPEN_SPLIT;
 import static com.facebook.presto.hive.HiveErrorCode.HIVE_FILESYSTEM_ERROR;
@@ -37,7 +37,7 @@ public class HdfsParquetDataSource
 {
     private final FSDataInputStream inputStream;
     private final FileFormatDataSourceStats stats;
-    private static final Logger LOGGER = Logger.getLogger(HdfsParquetDataSource.class.getName());
+    private static final Logger LOGGER = Logger.get(HdfsParquetDataSource.class);
 
     public HdfsParquetDataSource(ParquetDataSourceId id, FSDataInputStream inputStream, FileFormatDataSourceStats stats)
     {
@@ -58,16 +58,20 @@ public class HdfsParquetDataSource
     {
         BackOffService backoff = new BackOffService(3, 1000L);
         try {
+            LOGGER.info("Trying to write data | checking for IO exception");
+            LOGGER.warn("Trying to write data | checking for IO exception");
             long start = System.nanoTime();
             inputStream.readFully(position, buffer, bufferOffset, bufferLength);
             stats.readDataBytesPerSecond(bufferLength, System.nanoTime() - start);
         }
         catch (PrestoException e) {
             // just in case there is a Presto wrapper or hook
+            LOGGER.info("Got PrestoException while reading data" + e.toString());
             throw e;
         }
-        catch (IOException e) {
-            LOGGER.warning("Received IO Exception,retrying with exponential backoff");
+        catch (Exception e) {
+            LOGGER.info("Received IO Exception, exponential backoff");
+            LOGGER.warn("Received IO Exception, exponential backoff");
             while (backoff.shouldRetry()) {
                 try {
                     long start = System.nanoTime();
@@ -75,13 +79,11 @@ public class HdfsParquetDataSource
                     stats.readDataBytesPerSecond(bufferLength, System.nanoTime() - start);
                 }
                 catch (IOException ioException) {
+                    LOGGER.info("Caught IO exception when retrying");
                     backoff.errorOccurred(ioException);
                 }
             }
             throw new PrestoException(HIVE_FILESYSTEM_ERROR, "Getting IO exception and retry failed", e);
-        }
-        catch (Exception e) {
-            throw new PrestoException(HIVE_FILESYSTEM_ERROR, format("Error reading from %s at position %s", getId(), position), e);
         }
     }
 
