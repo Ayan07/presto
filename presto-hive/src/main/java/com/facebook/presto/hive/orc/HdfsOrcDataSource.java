@@ -13,9 +13,11 @@
  */
 package com.facebook.presto.hive.orc;
 
+import com.facebook.airlift.log.Logger;
 import com.facebook.presto.hive.FileFormatDataSourceStats;
 import com.facebook.presto.orc.AbstractOrcDataSource;
 import com.facebook.presto.orc.OrcDataSourceId;
+import com.facebook.presto.parquet.retry.BackOffService;
 import com.facebook.presto.spi.PrestoException;
 import io.airlift.units.DataSize;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -33,6 +35,7 @@ public class HdfsOrcDataSource
 {
     private final FSDataInputStream inputStream;
     private final FileFormatDataSourceStats stats;
+    private static final Logger LOGGER = Logger.get(HdfsOrcDataSource.class);
 
     public HdfsOrcDataSource(
             OrcDataSourceId id,
@@ -59,6 +62,8 @@ public class HdfsOrcDataSource
     @Override
     protected void readInternal(long position, byte[] buffer, int bufferOffset, int bufferLength)
     {
+        BackOffService backoff = new BackOffService(3, 1000L);
+        boolean flag = false;
         try {
             long readStart = System.nanoTime();
             inputStream.readFully(position, buffer, bufferOffset, bufferLength);
@@ -66,7 +71,28 @@ public class HdfsOrcDataSource
         }
         catch (PrestoException e) {
             // just in case there is a Presto wrapper or hook
+            LOGGER.debug("Got PrestoException while reading data" + e.toString());
             throw e;
+        }
+        catch (IOException e) {
+            LOGGER.debug("Received IO Exception, retrying with exponential backoff");
+            while (backoff.shouldRetry()) {
+                LOGGER.debug("Retrying with retry count :" + backoff.getNumberOfTriesLeft() + "for path " + this + "and position " + position);
+                try {
+                    long start = System.nanoTime();
+                    inputStream.readFully(position, buffer, bufferOffset, bufferLength);
+                    stats.readDataBytesPerSecond(bufferLength, System.nanoTime() - start);
+                    flag = true;
+                    break;
+                }
+                catch (IOException ioException) {
+                    LOGGER.debug("Caught IO exception when retrying");
+                    backoff.errorOccurred(ioException);
+                }
+            }
+            if (!flag) {
+                throw new PrestoException(HIVE_FILESYSTEM_ERROR, "Getting IO exception and retry failed", e);
+            }
         }
         catch (Exception e) {
             String message = format("Error reading from %s at position %s. ", this, position);
