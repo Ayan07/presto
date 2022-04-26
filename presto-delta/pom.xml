@@ -185,8 +185,16 @@
                     <artifactId>discovery</artifactId>
                 </exclusion>
                 <exclusion>
+                    <groupId>org.scala-lang.modules</groupId>
+                    <artifactId>scala-collection-compat_2.11</artifactId>
+                </exclusion>
+                <exclusion>
                     <groupId>com.facebook.airlift</groupId>
                     <artifactId>event</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.yaml</groupId>
+                    <artifactId>snakeyaml</artifactId>
                 </exclusion>
                 <exclusion>
                     <groupId>org.apache.hudi</groupId>

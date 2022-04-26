@@ -45,7 +45,6 @@ public class RangerAuthorizer
 
     public RangerAuthorizer(ServicePolicies servicePolicies)
     {
-
         RangerPolicyEngineOptions rangerPolicyEngineOptions = new RangerPolicyEngineOptions();
         Configuration conf = new Configuration();
         conf.set("hive.policyengine.option.disable.tagpolicy.evaluation", "true");
