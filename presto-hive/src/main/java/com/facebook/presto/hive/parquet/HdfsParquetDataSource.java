@@ -78,7 +78,7 @@ public class HdfsParquetDataSource
         catch (IOException e) {
             LOGGER.debug("Received IO Exception, exponential backoff");
             while (backoff.shouldRetry()) {
-                LOGGER.debug("Retrying with retry count :" + backoff.getNumberOfTriesLeft() + "for path " + getId() + "and position " + position );
+                LOGGER.debug("Retrying with retry count :" + backoff.getNumberOfTriesLeft() + "for path " + getId() + "and position " + position);
                 try {
                     long start = System.nanoTime();
                     inputStream.readFully(position, buffer, bufferOffset, bufferLength);
