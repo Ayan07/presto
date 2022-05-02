@@ -76,7 +76,7 @@ public class HdfsParquetDataSource
             throw e;
         }
         catch (IOException e) {
-            LOGGER.debug("Received IO Exception, exponential backoff");
+            LOGGER.error("Received IO Exception, exponential backoff");
             while (backoff.shouldRetry()) {
                 LOGGER.debug("Retrying with retry count :" + backoff.getNumberOfTriesLeft() + "for path " + getId() + "and position " + position);
                 try {
@@ -87,7 +87,7 @@ public class HdfsParquetDataSource
                     break;
                 }
                 catch (IOException ioException) {
-                    LOGGER.debug("Caught IO exception when retrying");
+                    LOGGER.error("Caught IO exception when retrying with exponential backOff");
                     backoff.errorOccurred(ioException);
                 }
             }

@@ -54,7 +54,7 @@ public class BackOffService
     {
         numberOfTriesLeft--;
         if (!shouldRetry()) {
-            LOGGER.info("**RETRY FAILED**");
+            LOGGER.error("**EXPONENTIAL BACKOFF RETRY FAILED**");
         }
         LOGGER.warn(e.toString());
         LOGGER.info("Waiting before next retry");
