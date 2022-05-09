@@ -71,11 +71,11 @@ public class HdfsOrcDataSource
         }
         catch (PrestoException e) {
             // just in case there is a Presto wrapper or hook
-            LOGGER.debug("Got PrestoException while reading data" + e.toString());
+            LOGGER.error("Got PrestoException while reading data" + e.toString());
             throw e;
         }
         catch (IOException e) {
-            LOGGER.debug("Received IO Exception, retrying with exponential backoff");
+            LOGGER.error("Received IO Exception, retrying with exponential backoff");
             while (backoff.shouldRetry()) {
                 LOGGER.debug("Retrying with retry count :" + backoff.getNumberOfTriesLeft() + "for path " + this + "and position " + position);
                 try {
@@ -86,7 +86,7 @@ public class HdfsOrcDataSource
                     break;
                 }
                 catch (IOException ioException) {
-                    LOGGER.debug("Caught IO exception when retrying");
+                    LOGGER.error("Caught IO exception when retrying");
                     backoff.errorOccurred(ioException);
                 }
             }
