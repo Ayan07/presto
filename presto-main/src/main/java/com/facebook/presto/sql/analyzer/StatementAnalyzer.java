@@ -40,12 +40,14 @@ import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.PrestoWarning;
 import com.facebook.presto.spi.SchemaTableName;
 import com.facebook.presto.spi.TableHandle;
+import com.facebook.presto.spi.TableNotFoundException;
 import com.facebook.presto.spi.WarningCollector;
 import com.facebook.presto.spi.function.FunctionKind;
 import com.facebook.presto.spi.function.Signature;
 import com.facebook.presto.spi.function.SqlFunction;
 import com.facebook.presto.spi.security.AccessDeniedException;
 import com.facebook.presto.spi.security.Identity;
+import com.facebook.presto.spi.security.ViewExpression;
 import com.facebook.presto.sql.SqlFormatterUtil;
 import com.facebook.presto.sql.parser.ParsingException;
 import com.facebook.presto.sql.parser.SqlParser;
@@ -181,6 +183,8 @@ import static com.facebook.presto.common.type.UnknownType.UNKNOWN;
 import static com.facebook.presto.common.type.VarcharType.VARCHAR;
 import static com.facebook.presto.metadata.MetadataUtil.createQualifiedObjectName;
 import static com.facebook.presto.metadata.MetadataUtil.toSchemaTableName;
+import static com.facebook.presto.spi.StandardErrorCode.DATATYPE_MISMATCH;
+import static com.facebook.presto.spi.StandardErrorCode.INVALID_COLUMN_MASK;
 import static com.facebook.presto.spi.StandardErrorCode.INVALID_FUNCTION_ARGUMENT;
 import static com.facebook.presto.spi.StandardErrorCode.NOT_FOUND;
 import static com.facebook.presto.spi.StandardWarningCode.PERFORMANCE_WARNING;
@@ -377,6 +381,12 @@ class StatementAnalyzer
                     .map(ColumnMetadata::getName)
                     .collect(toImmutableList());
 
+            for (String column : tableColumns) {
+                if (!accessControl.getColumnMasks(session.getRequiredTransactionId(), session.getIdentity(), session.getAccessControlContext(), targetTable, column).isEmpty()) {
+                    throw new SemanticException(NOT_SUPPORTED, insert, "Insert into table with column masks");
+                }
+            }
+
             List<String> insertColumns;
             if (insert.getColumns().isPresent()) {
                 insertColumns = insert.getColumns().get().stream()
@@ -549,6 +559,20 @@ class StatementAnalyzer
             analysis.setUpdateType("DELETE");
 
             accessControl.checkCanDeleteFromTable(session.getRequiredTransactionId(), session.getIdentity(), session.getAccessControlContext(), tableName);
+
+            TableHandle handle = metadata.getTableHandle(session, tableName)
+                    .orElseThrow(() -> new TableNotFoundException(new SchemaTableName(tableName.getSchemaName(), tableName.getObjectName())));
+
+            TableMetadata tableMetadata = metadata.getTableMetadata(session, handle);
+            List<String> columns = tableMetadata.getColumns().stream()
+                    .map(ColumnMetadata::getName)
+                    .collect(toImmutableList());
+
+            for (String tableColumn : columns) {
+                if (!accessControl.getColumnMasks(session.getRequiredTransactionId(), session.getIdentity(), session.getAccessControlContext(), tableName, tableColumn).isEmpty()) {
+                    throw new SemanticException(NOT_SUPPORTED, node, "Delete from table with column mask");
+                }
+            }
 
             return createAndAssignScope(node, scope, Field.newUnqualified(node.getLocation(), "rows", BIGINT));
         }
@@ -1274,6 +1298,17 @@ class StatementAnalyzer
                 ColumnHandle columnHandle = columnHandles.get(column.getName());
                 checkArgument(columnHandle != null, "Unknown field %s", field);
                 analysis.setColumn(field, columnHandle);
+            }
+
+            List<Field> outputFields = fields.build();
+
+            Scope accessControlScope = Scope.builder()
+                    .withRelationType(RelationId.anonymous(), new RelationType(outputFields))
+                    .build();
+
+            for (Field field : outputFields) {
+                accessControl.getColumnMasks(session.getRequiredTransactionId(), session.getIdentity(), session.getAccessControlContext(), name, field.getName().get())
+                        .forEach(mask -> analyzeColumnMask(session.getIdentity().getUser(), table, name, field, accessControlScope, mask));
             }
 
             analysis.registerTable(table, tableHandle.get());
@@ -2505,20 +2540,7 @@ class StatementAnalyzer
                     viewAccessControl = accessControl;
                 }
 
-                Session viewSession = Session.builder(metadata.getSessionPropertyManager())
-                        .setQueryId(session.getQueryId())
-                        .setTransactionId(session.getTransactionId().orElse(null))
-                        .setIdentity(identity)
-                        .setSource(session.getSource().orElse(null))
-                        .setCatalog(catalog.orElse(null))
-                        .setSchema(schema.orElse(null))
-                        .setTimeZoneKey(session.getTimeZoneKey())
-                        .setLocale(session.getLocale())
-                        .setRemoteUserAddress(session.getRemoteUserAddress().orElse(null))
-                        .setUserAgent(session.getUserAgent().orElse(null))
-                        .setClientInfo(session.getClientInfo().orElse(null))
-                        .setStartTime(session.getStartTime())
-                        .build();
+                Session viewSession = createViewSession(catalog, schema, identity);
 
                 StatementAnalyzer analyzer = new StatementAnalyzer(analysis, metadata, sqlParser, viewAccessControl, viewSession, warningCollector);
                 Scope queryScope = analyzer.analyze(query, Scope.create());
@@ -2528,6 +2550,24 @@ class StatementAnalyzer
                 throwIfInstanceOf(e, PrestoException.class);
                 throw new SemanticException(VIEW_ANALYSIS_ERROR, node, "Failed analyzing stored view '%s': %s", name, e.getMessage());
             }
+        }
+
+        private Session createViewSession(Optional<String> catalog, Optional<String> schema, Identity identity)
+        {
+            return Session.builder(metadata.getSessionPropertyManager())
+                    .setQueryId(session.getQueryId())
+                    .setTransactionId(session.getTransactionId().orElse(null))
+                    .setIdentity(identity)
+                    .setSource(session.getSource().orElse(null))
+                    .setCatalog(catalog.orElse(null))
+                    .setSchema(schema.orElse(null))
+                    .setTimeZoneKey(session.getTimeZoneKey())
+                    .setLocale(session.getLocale())
+                    .setRemoteUserAddress(session.getRemoteUserAddress().orElse(null))
+                    .setUserAgent(session.getUserAgent().orElse(null))
+                    .setClientInfo(session.getClientInfo().orElse(null))
+                    .setStartTime(session.getStartTime())
+                    .build();
         }
 
         private Query parseView(String view, QualifiedObjectName name, Node node)
@@ -2570,6 +2610,62 @@ class StatementAnalyzer
                     analysis,
                     expression,
                     warningCollector);
+        }
+
+        private void analyzeColumnMask(String currentIdentity, Table table, QualifiedObjectName tableName, Field field, Scope scope, ViewExpression mask)
+        {
+            String column = field.getName().get();
+            if (analysis.hasColumnMask(tableName, column, currentIdentity)) {
+                throw new PrestoException(INVALID_COLUMN_MASK, format("Column mask for '%s.%s' is recursive", tableName, column), null);
+            }
+
+            Expression expression;
+            try {
+                expression = sqlParser.createExpression(mask.getExpression(), createParsingOptions(session));
+            }
+            catch (ParsingException e) {
+                throw new PrestoException(INVALID_COLUMN_MASK, format("Invalid column mask for '%s.%s': %s", tableName, column, e.getErrorMessage()), e);
+            }
+
+            ExpressionAnalysis expressionAnalysis;
+            analysis.registerTableForColumnMasking(tableName, column, currentIdentity);
+            try {
+                expressionAnalysis = ExpressionAnalyzer.analyzeExpression(
+                        createViewSession(mask.getCatalog(), mask.getSchema(), new Identity(mask.getIdentity(), Optional.empty())), // TODO: path should be included in row filter
+                        metadata,
+                        accessControl,
+                        sqlParser,
+                        scope,
+                        analysis,
+                        expression,
+                        warningCollector);
+            }
+            catch (PrestoException e) {
+                throw new PrestoException(e::getErrorCode, format("Invalid column mask for '%s.%s': %s", tableName, column, e.getMessage()), e);
+            }
+            finally {
+                analysis.unregisterTableForColumnMasking(tableName, column, currentIdentity);
+            }
+
+            verifyNoAggregateWindowOrGroupingFunctions(analysis.getFunctionHandles(), metadata.getFunctionAndTypeManager(), expression, format("Column mask for '%s.%s'", table.getName(), column));
+
+            analysis.recordSubqueries(expression, expressionAnalysis);
+
+            Type expectedType = field.getType();
+            Type actualType = expressionAnalysis.getType(expression);
+            if (!actualType.equals(expectedType)) {
+                if (!metadata.getFunctionAndTypeManager().canCoerce(actualType, field.getType())) {
+                    throw new PrestoException(DATATYPE_MISMATCH, format("Expected column mask for '%s.%s' to be of type %s, but was %s", tableName, column, field.getType(), actualType), null);
+                }
+
+                // TODO: this should be "coercion.isTypeOnlyCoercion(actualType, expectedType)", but type-only coercions are broken
+                // due to the line "changeType(value, returnType)" in SqlToRowExpressionTranslator.visitCast. If there's an expression
+                // like CAST(CAST(x AS VARCHAR(1)) AS VARCHAR(2)), it determines that the outer cast is type-only and converts the expression
+                // to CAST(x AS VARCHAR(2)) by changing the type of the inner cast.
+                analysis.addCoercion(expression, expectedType, false);
+            }
+
+            analysis.addColumnMask(table, column, expression);
         }
 
         private List<Expression> descriptorToFields(Scope scope)

@@ -178,7 +178,43 @@ class RelationPlanner
 
         List<VariableReferenceExpression> outputVariables = outputVariablesBuilder.build();
         PlanNode root = new TableScanNode(getSourceLocation(node.getLocation()), idAllocator.getNextId(), handle, outputVariables, columns.build(), TupleDomain.all(), TupleDomain.all());
-        return new RelationPlan(root, scope, outputVariables);
+        RelationPlan tableScan = new RelationPlan(root, scope, outputVariables);
+        tableScan = addColumnMasks(node, tableScan);
+        return tableScan;
+    }
+
+    private RelationPlan addColumnMasks(Table table, RelationPlan plan)
+    {
+        Map<String, List<Expression>> columnMasks = analysis.getColumnMasks(table);
+
+        PlanNode root = plan.getRoot();
+        List<VariableReferenceExpression> mappings = plan.getFieldMappings();
+
+        TranslationMap translations = new TranslationMap(plan, analysis, lambdaDeclarationToVariableMap);
+        translations.setFieldMappings(mappings);
+
+        PlanBuilder planBuilder = new PlanBuilder(translations, root);
+
+        for (int i = 0; i < plan.getDescriptor().getAllFieldCount(); i++) {
+            Field field = plan.getDescriptor().getFieldByIndex(i);
+
+            for (Expression mask : columnMasks.getOrDefault(field.getName().get(), ImmutableList.of())) {
+                planBuilder = subqueryPlanner.handleSubqueries(planBuilder, mask, mask);
+
+                Map<VariableReferenceExpression, RowExpression> assignments = new LinkedHashMap<>();
+                for (VariableReferenceExpression variable : root.getOutputVariables()) {
+                    assignments.put(variable, castToRowExpression(createSymbolReference(variable)));
+                }
+                assignments.put(mappings.get(i), castToRowExpression(translations.rewrite(mask)));
+
+                planBuilder = planBuilder.withNewRoot(new ProjectNode(
+                        idAllocator.getNextId(),
+                        planBuilder.getRoot(),
+                        Assignments.copyOf(assignments)));
+            }
+        }
+
+        return new RelationPlan(planBuilder.getRoot(), plan.getScope(), mappings);
     }
 
     @Override
