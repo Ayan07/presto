@@ -23,10 +23,15 @@ import com.facebook.presto.spi.connector.ConnectorTransactionHandle;
 import com.facebook.presto.spi.security.AccessControlContext;
 import com.facebook.presto.spi.security.AccessDeniedException;
 import com.facebook.presto.spi.security.ConnectorIdentity;
+import com.facebook.presto.spi.security.ViewExpression;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.inject.Inject;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.ranger.plugin.model.RangerPolicy;
+import org.apache.ranger.plugin.model.RangerServiceDef;
+import org.apache.ranger.plugin.policyengine.RangerAccessResult;
 import org.apache.ranger.plugin.policyengine.RangerPolicyEngine;
 import org.apache.ranger.plugin.util.ServicePolicies;
 
@@ -35,6 +40,7 @@ import java.net.URI;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
 
@@ -499,5 +505,49 @@ public class RangerBasedAccessControl
     @Override
     public void checkCanSetCatalogSessionProperty(ConnectorTransactionHandle transactionHandle, ConnectorIdentity identity, AccessControlContext context, String propertyName)
     {
+    }
+
+    @Override
+    public Optional<ViewExpression> getColumnMask(ConnectorTransactionHandle transactionHandle, ConnectorIdentity identity, AccessControlContext context, SchemaTableName tableName, String columnName)
+    {
+        Set<String> groups = getGroupsForUser(identity.getUser());
+        Set<String> roles = getRolesForUser(identity.getUser());
+        RangerAccessResult result = rangerAuthorizer.getDataMaskResult(tableName.getSchemaName(), tableName.getTableName(), columnName, RangerPolicyEngine.ANY_ACCESS, identity.getUser(), groups, roles);
+
+        ViewExpression viewExpression = null;
+        if (result != null && result.isMaskEnabled()) {
+            String maskType = result.getMaskType();
+            RangerServiceDef.RangerDataMaskTypeDef maskTypeDef = result.getMaskTypeDef();
+            String transformer = null;
+
+            if (maskTypeDef != null) {
+                transformer = maskTypeDef.getTransformer();
+            }
+
+            if (StringUtils.equalsIgnoreCase(maskType, RangerPolicy.MASK_TYPE_NULL)) {
+                transformer = "NULL";
+            }
+            else if (StringUtils.equalsIgnoreCase(maskType, RangerPolicy.MASK_TYPE_CUSTOM)) {
+                String maskedValue = result.getMaskedValue();
+
+                if (maskedValue == null) {
+                    transformer = "NULL";
+                }
+                else {
+                    transformer = maskedValue;
+                }
+            }
+
+            if (StringUtils.isNotEmpty(transformer)) {
+                transformer = transformer.replace("{col}", columnName);
+            }
+
+            viewExpression = new ViewExpression(
+                    identity.getUser(),
+                    Optional.of(null),
+                    Optional.of(tableName.getSchemaName()),
+                    transformer);
+        }
+        return Optional.ofNullable(viewExpression);
     }
 }

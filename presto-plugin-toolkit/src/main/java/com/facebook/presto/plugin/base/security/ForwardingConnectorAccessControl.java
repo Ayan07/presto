@@ -229,6 +229,6 @@ public abstract class ForwardingConnectorAccessControl
     @Override
     public Optional<ViewExpression> getColumnMask(ConnectorTransactionHandle transactionHandle, ConnectorIdentity identity, AccessControlContext context, SchemaTableName tableName, String columnName)
     {
-        return Optional.empty();
+        return delegate().getColumnMask(transactionHandle, identity, context, tableName, columnName);
     }
 }

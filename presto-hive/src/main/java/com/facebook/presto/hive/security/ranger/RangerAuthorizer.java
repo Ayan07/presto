@@ -127,4 +127,27 @@ public class RangerAuthorizer
 
         return result != null && result.getIsAllowed();
     }
+
+    public RangerAccessResult getDataMaskResult(String database, String table, String column, String accessType, String user, Set<String> userGroups, Set<String> userRoles)
+    {
+        updateRangerPolicies();
+        RangerAccessResourceImpl resource = new RangerAccessResourceImpl();
+        if (!isNullOrEmpty(database)) {
+            resource.setValue(KEY_DATABASE, database);
+        }
+
+        if (!isNullOrEmpty(table)) {
+            resource.setValue(KEY_TABLE, table);
+        }
+
+        if (!isNullOrEmpty(column)) {
+            resource.setValue(KEY_COLUMN, column);
+        }
+
+        RangerAccessRequest request = new RangerAccessRequestImpl(resource, accessType.toLowerCase(ENGLISH), user, userGroups, userRoles);
+
+        RangerAccessResult result = plugin.evalDataMaskPolicies(request, null);
+
+        return result;
+    }
 }
