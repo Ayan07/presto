@@ -37,6 +37,7 @@ import org.apache.ranger.plugin.util.ServicePolicies;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -141,7 +142,7 @@ public class RangerBasedAccessControl
     private Users getUsers(RangerBasedAccessControlConfig config)
     {
         URI uri = uriBuilderFrom(URI.create(config.getRangerHttpEndPoint()))
-                .appendPath(RANGER_REST_USER_GROUP_URL)
+                .appendPath(RANGER_REST_USER_GROUP_URL).addParameter("pageSize", "500").addParameter("startIndex", "0")
                 .build();
         Request request = setContentTypeHeaders(prepareGet())
                 .setUri(uri)
@@ -218,7 +219,7 @@ public class RangerBasedAccessControl
     private boolean checkAccess(ConnectorIdentity identity, SchemaTableName tableName, String column, HiveAccessType accessType)
     {
         return rangerAuthorizer.authorizeHiveResource(tableName.getSchemaName(), tableName.getTableName(), column,
-                accessType.toString(), identity.getUser(), getGroupsForUser(identity.getUser()), getRolesForUser(identity.getUser()));
+                accessType.toString(), identity.getUser(), getGroupsForUser(identity.getUser()), Collections.emptySet());
     }
 
     /**
@@ -271,10 +272,10 @@ public class RangerBasedAccessControl
     {
         Set<String> allowedSchemas = new HashSet<>();
         Set<String> groups = getGroupsForUser(identity.getUser());
-        Set<String> roles = getRolesForUser(identity.getUser());
+//        Set<String> roles = getRolesForUser(identity.getUser());
 
         for (String schema : schemaNames) {
-            if (rangerAuthorizer.authorizeHiveResource(schema, null, null, RangerPolicyEngine.ANY_ACCESS, identity.getUser(), groups, roles)) {
+            if (rangerAuthorizer.authorizeHiveResource(schema, null, null, RangerPolicyEngine.ANY_ACCESS, identity.getUser(), groups, Collections.emptySet())) {
                 allowedSchemas.add(schema);
             }
         }
@@ -303,10 +304,10 @@ public class RangerBasedAccessControl
     {
         Set<SchemaTableName> allowedTables = new HashSet<>();
         Set<String> groups = getGroupsForUser(identity.getUser());
-        Set<String> roles = getRolesForUser(identity.getUser());
+//        Set<String> roles = getRolesForUser(identity.getUser());
 
         for (SchemaTableName table : tableNames) {
-            if (rangerAuthorizer.authorizeHiveResource(table.getSchemaName(), table.getTableName(), null, RangerPolicyEngine.ANY_ACCESS, identity.getUser(), groups, roles)) {
+            if (rangerAuthorizer.authorizeHiveResource(table.getSchemaName(), table.getTableName(), null, RangerPolicyEngine.ANY_ACCESS, identity.getUser(), groups, Collections.emptySet())) {
                 allowedTables.add(table);
             }
         }
@@ -511,8 +512,8 @@ public class RangerBasedAccessControl
     public Optional<ViewExpression> getColumnMask(ConnectorTransactionHandle transactionHandle, ConnectorIdentity identity, AccessControlContext context, SchemaTableName tableName, String columnName)
     {
         Set<String> groups = getGroupsForUser(identity.getUser());
-        Set<String> roles = getRolesForUser(identity.getUser());
-        RangerAccessResult result = rangerAuthorizer.getDataMaskResult(tableName.getSchemaName(), tableName.getTableName(), columnName, RangerPolicyEngine.ANY_ACCESS, identity.getUser(), groups, roles);
+//        Set<String> roles = getRolesForUser(identity.getUser());
+        RangerAccessResult result = rangerAuthorizer.getDataMaskResult(tableName.getSchemaName(), tableName.getTableName(), columnName, HiveAccessType.SELECT.toString(), identity.getUser(), groups, Collections.emptySet());
 
         ViewExpression viewExpression = null;
         if (result != null && result.isMaskEnabled()) {
@@ -544,7 +545,7 @@ public class RangerBasedAccessControl
 
             viewExpression = new ViewExpression(
                     identity.getUser(),
-                    Optional.of(null),
+                    Optional.of("hive"),
                     Optional.of(tableName.getSchemaName()),
                     transformer);
         }
