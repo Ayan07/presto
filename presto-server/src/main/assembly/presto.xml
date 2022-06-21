@@ -169,6 +169,10 @@
             <outputDirectory>plugin/teradata-functions</outputDirectory>
         </fileSet>
         <fileSet>
+            <directory>${project.build.directory}/dependency/presto-udfs-${project.version}</directory>
+            <outputDirectory>plugin/udfs</outputDirectory>
+        </fileSet>
+        <fileSet>
             <directory>${project.build.directory}/dependency/presto-mongodb-${project.version}</directory>
             <outputDirectory>plugin/mongodb</outputDirectory>
         </fileSet>

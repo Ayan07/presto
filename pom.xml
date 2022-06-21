@@ -180,6 +180,7 @@
         <module>presto-delta</module>
         <module>presto-grpc-api</module>
         <module>presto-grpc-testing-udf-server</module>
+        <module>presto-udfs</module>
     </modules>
 
     <dependencyManagement>
@@ -2315,6 +2316,7 @@
                         </violationsFiles>
                         <exclusionPatterns>
                             <exclusionPattern>org/joda/time/.*</exclusionPattern>
+                            <exclusionPattern>org/apache/commons/.*</exclusionPattern>
                         </exclusionPatterns>
                     </configuration>
                 </plugin>

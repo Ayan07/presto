@@ -139,10 +139,10 @@ public class RangerBasedAccessControl
         }
     }
 
-    private Users getUsers(RangerBasedAccessControlConfig config)
+    private Users getUsers(RangerBasedAccessControlConfig config, int startIndex)
     {
         URI uri = uriBuilderFrom(URI.create(config.getRangerHttpEndPoint()))
-                .appendPath(RANGER_REST_USER_GROUP_URL).addParameter("pageSize", "500").addParameter("startIndex", "0")
+                .appendPath(RANGER_REST_USER_GROUP_URL).addParameter("pageSize", "500").addParameter("startIndex", Integer.toString(startIndex))
                 .build();
         Request request = setContentTypeHeaders(prepareGet())
                 .setUri(uri)
@@ -159,11 +159,20 @@ public class RangerBasedAccessControl
 
     private Map<String, Set<String>> getRolesForUserList(RangerBasedAccessControlConfig config)
     {
-        Users users = getUsers(config);
+        boolean flag = true;
+        int startIndex = 0;
         ImmutableMap.Builder<String, Set<String>> userRolesMapping = ImmutableMap.builder();
-        for (VXUser vxUser : users.getvXUsers()) {
-            userRolesMapping.put(vxUser.getName(), getRolesForUser(vxUser.getName(), config));
+        while (flag) {
+            Users users = getUsers(config, startIndex);
+            if (users.getResultSize() < 500) {
+                flag = false;
+            }
+            for (VXUser vxUser : users.getvXUsers()) {
+                userRolesMapping.put(vxUser.getName(), getRolesForUser(vxUser.getName(), config));
+            }
+            startIndex += 500;
         }
+
         return userRolesMapping.build();
     }
 
@@ -181,12 +190,20 @@ public class RangerBasedAccessControl
 
     private Map<String, Set<String>> getUserGroupsMappings(RangerBasedAccessControlConfig config)
     {
-        Users users = getUsers(config);
+        boolean flag = true;
+        int startIndex = 0;
         ImmutableMap.Builder<String, Set<String>> userGroupsMapping = ImmutableMap.builder();
-        for (VXUser vxUser : users.getvXUsers()) {
-            if (!(isNull(vxUser.getGroupNameList()) || vxUser.getGroupNameList().isEmpty())) {
-                userGroupsMapping.put(vxUser.getName(), ImmutableSet.copyOf(vxUser.getGroupNameList()));
+        while (flag) {
+            Users users = getUsers(config, startIndex);
+            if (users.getResultSize() < 500) {
+                flag = false;
             }
+            for (VXUser vxUser : users.getvXUsers()) {
+                if (!(isNull(vxUser.getGroupNameList()) || vxUser.getGroupNameList().isEmpty())) {
+                    userGroupsMapping.put(vxUser.getName(), ImmutableSet.copyOf(vxUser.getGroupNameList()));
+                }
+            }
+            startIndex += 500;
         }
         return userGroupsMapping.build();
     }
