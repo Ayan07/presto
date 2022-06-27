@@ -54,7 +54,7 @@ public class Encryption
     }
 
     @Description("encrypts the string.")
-    @ScalarFunction("default.encrypt")
+    @ScalarFunction("default_encrypt")
     @SqlType(StandardTypes.VARCHAR)
     public static Slice encrypt(@SqlType(StandardTypes.VARCHAR) Slice str)
             throws BadPaddingException, IllegalBlockSizeException

@@ -14,6 +14,7 @@
 package com.facebook.presto.plugin.base.security;
 
 import com.facebook.presto.plugin.base.security.TableAccessControlRule.TablePrivilege;
+import com.facebook.presto.spi.CatalogSchemaTableName;
 import com.facebook.presto.spi.SchemaTableName;
 import com.facebook.presto.spi.connector.ConnectorAccessControl;
 import com.facebook.presto.spi.connector.ConnectorTransactionHandle;
@@ -281,7 +282,7 @@ public class FileBasedAccessControl
     }
 
     @Override
-    public Optional<ViewExpression> getColumnMask(ConnectorTransactionHandle transactionHandle, ConnectorIdentity identity, AccessControlContext context, SchemaTableName tableName, String columnName)
+    public Optional<ViewExpression> getColumnMask(ConnectorTransactionHandle transactionHandle, ConnectorIdentity identity, AccessControlContext context, CatalogSchemaTableName tableName, String columnName)
     {
         return Optional.empty();
     }

@@ -699,7 +699,7 @@ public class AccessControlManager
         // connector-provided masks take precedence over global masks
         CatalogAccessControlEntry entry = getConnectorAccessControl(transactionId, tableName.getCatalogName());
         if (entry != null) {
-            entry.getAccessControl().getColumnMask(entry.getTransactionHandle(transactionId), identity.toConnectorIdentity(tableName.getCatalogName()), context, toSchemaTableName(tableName), columnName)
+            entry.getAccessControl().getColumnMask(entry.getTransactionHandle(transactionId), identity.toConnectorIdentity(tableName.getCatalogName()), context, toCatalogSchemaTableName(tableName), columnName)
                     .ifPresent(masks::add);
         }
 
