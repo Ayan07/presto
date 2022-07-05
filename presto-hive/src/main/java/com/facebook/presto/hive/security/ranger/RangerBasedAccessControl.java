@@ -16,6 +16,7 @@ package com.facebook.presto.hive.security.ranger;
 import com.facebook.airlift.http.client.HttpClient;
 import com.facebook.airlift.http.client.Request;
 import com.facebook.airlift.json.JsonCodec;
+import com.facebook.presto.spi.CatalogSchemaTableName;
 import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.SchemaTableName;
 import com.facebook.presto.spi.connector.ConnectorAccessControl;
@@ -272,10 +273,10 @@ public class RangerBasedAccessControl
     {
         Set<String> allowedSchemas = new HashSet<>();
         Set<String> groups = getGroupsForUser(identity.getUser());
-//        Set<String> roles = getRolesForUser(identity.getUser());
+        Set<String> roles = getRolesForUser(identity.getUser());
 
         for (String schema : schemaNames) {
-            if (rangerAuthorizer.authorizeHiveResource(schema, null, null, RangerPolicyEngine.ANY_ACCESS, identity.getUser(), groups, Collections.emptySet())) {
+            if (rangerAuthorizer.authorizeHiveResource(schema, null, null, RangerPolicyEngine.ANY_ACCESS, identity.getUser(), groups, roles)) {
                 allowedSchemas.add(schema);
             }
         }
@@ -304,10 +305,10 @@ public class RangerBasedAccessControl
     {
         Set<SchemaTableName> allowedTables = new HashSet<>();
         Set<String> groups = getGroupsForUser(identity.getUser());
-//        Set<String> roles = getRolesForUser(identity.getUser());
+        Set<String> roles = getRolesForUser(identity.getUser());
 
         for (SchemaTableName table : tableNames) {
-            if (rangerAuthorizer.authorizeHiveResource(table.getSchemaName(), table.getTableName(), null, RangerPolicyEngine.ANY_ACCESS, identity.getUser(), groups, Collections.emptySet())) {
+            if (rangerAuthorizer.authorizeHiveResource(table.getSchemaName(), table.getTableName(), null, RangerPolicyEngine.ANY_ACCESS, identity.getUser(), groups, roles)) {
                 allowedTables.add(table);
             }
         }
@@ -509,11 +510,11 @@ public class RangerBasedAccessControl
     }
 
     @Override
-    public Optional<ViewExpression> getColumnMask(ConnectorTransactionHandle transactionHandle, ConnectorIdentity identity, AccessControlContext context, SchemaTableName tableName, String columnName)
+    public Optional<ViewExpression> getColumnMask(ConnectorTransactionHandle transactionHandle, ConnectorIdentity identity, AccessControlContext context, CatalogSchemaTableName tableName, String columnName)
     {
         Set<String> groups = getGroupsForUser(identity.getUser());
-//        Set<String> roles = getRolesForUser(identity.getUser());
-        RangerAccessResult result = rangerAuthorizer.getDataMaskResult(tableName.getSchemaName(), tableName.getTableName(), columnName, HiveAccessType.SELECT.toString(), identity.getUser(), groups, Collections.emptySet());
+        Set<String> roles = getRolesForUser(identity.getUser());
+        RangerAccessResult result = rangerAuthorizer.getDataMaskResult(tableName.getSchemaTableName().getSchemaName(), tableName.getSchemaTableName().getTableName(), columnName, HiveAccessType.SELECT.toString(), identity.getUser(), groups, roles);
 
         ViewExpression viewExpression = null;
         if (result != null && result.isMaskEnabled()) {
@@ -545,8 +546,8 @@ public class RangerBasedAccessControl
 
             viewExpression = new ViewExpression(
                     identity.getUser(),
-                    Optional.of("hive"),
-                    Optional.of(tableName.getSchemaName()),
+                    Optional.of(tableName.getCatalogName()),
+                    Optional.of(tableName.getSchemaTableName().getSchemaName()),
                     transformer);
         }
         return Optional.ofNullable(viewExpression);

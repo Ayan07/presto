@@ -13,6 +13,7 @@
  */
 package com.facebook.presto.spi.connector;
 
+import com.facebook.presto.spi.CatalogSchemaTableName;
 import com.facebook.presto.spi.SchemaTableName;
 import com.facebook.presto.spi.security.AccessControlContext;
 import com.facebook.presto.spi.security.ConnectorIdentity;
@@ -342,7 +343,7 @@ public interface ConnectorAccessControl
      *
      * @return the mask, or {@link Optional#empty()} if not applicable
      */
-    default Optional<ViewExpression> getColumnMask(ConnectorTransactionHandle transactionHandle, ConnectorIdentity identity, AccessControlContext context, SchemaTableName tableName, String columnName)
+    default Optional<ViewExpression> getColumnMask(ConnectorTransactionHandle transactionHandle, ConnectorIdentity identity, AccessControlContext context, CatalogSchemaTableName tableName, String columnName)
     {
         return Optional.empty();
     }
