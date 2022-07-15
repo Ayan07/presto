@@ -26,6 +26,7 @@ public class UdfPlugin
     {
         return ImmutableSet.<Class<?>>builder()
                 .add(Encryption.class)
+                .add(GeographicFunctions.class)
                 .build();
     }
 }

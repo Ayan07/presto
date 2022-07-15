@@ -23,6 +23,13 @@
         <artifactId>guava</artifactId>
     </dependency>
 
+        <dependency>
+            <groupId>com.github.davidmoten</groupId>
+            <artifactId>geo</artifactId>
+            <version>0.7.4</version>
+        </dependency>
+
+
         <!-- Presto SPI -->
         <dependency>
             <groupId>com.facebook.presto</groupId>
